@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>极光表彰邮件生成器</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
   :root{
     --teal:#18AD91;--blue:#2477a8;--navy:#2c34b6;
@@ -11,8 +12,11 @@
   }
   *{box-sizing:border-box;margin:0;padding:0;}
   body{background:var(--bg);font-family:"PingFang SC","Microsoft YaHei",sans-serif;color:var(--text);min-height:100vh;}
-  .app{display:grid;grid-template-columns:460px 1fr;height:100vh;overflow:hidden;}
+  .app{display:grid;grid-template-columns:var(--left-panel-width,460px) 8px 1fr;height:100vh;overflow:hidden;}
   .panel-left{overflow-y:auto;background:var(--card);border-right:1px solid var(--border);display:flex;flex-direction:column;}
+  .resize-handle{background:#e2e8f0;cursor:col-resize;position:relative;transition:background .2s;touch-action:none;}
+  .resize-handle::after{content:"";position:absolute;top:50%;left:50%;width:2px;height:42px;border-radius:999px;background:#94a3b8;transform:translate(-50%,-50%);opacity:.55;}
+  .resize-handle:hover,.resize-handle.dragging{background:#cbd5e1;}
   .panel-right{overflow:hidden;background:#e8ecf0;display:flex;flex-direction:column;}
   .left-header{padding:20px 24px 16px;background:linear-gradient(135deg,#18AD91,#2c34b6);color:#fff;flex-shrink:0;}
   .left-header h1{font-size:18px;font-weight:700;letter-spacing:1px;}
@@ -27,16 +31,24 @@
   .field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
   .person-list{display:flex;flex-direction:column;gap:8px;}
   .person-card{border:1px solid var(--border);border-radius:8px;overflow:hidden;}
-  .person-card-header{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#f8fafc;cursor:pointer;user-select:none;}
-  .person-avatar-thumb{width:36px;height:36px;border-radius:50%;object-fit:cover;border:2px solid var(--teal);flex-shrink:0;background:#e8f5f3;}
+  .person-card-header{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#f8fafc;user-select:none;}
+  .person-avatar-thumb{width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;background:#f8fafc;box-shadow:0 3px 10px rgba(15,23,42,.14);}
   .person-info{flex:1;min-width:0;}
   .person-name{font-size:13px;font-weight:600;color:var(--text);}
   .person-badge{font-size:11px;padding:2px 8px;border-radius:999px;background:linear-gradient(135deg,var(--teal),var(--navy));color:#fff;font-weight:600;}
-  .person-card-body{padding:12px;border-top:1px solid var(--border);display:none;}
+  .person-card-body{padding:12px;border-top:1px solid var(--border);display:block;}
   .person-card-body.open{display:block;}
   .person-card-body .field{margin-bottom:8px;}
-  .avatar-upload{display:flex;align-items:center;gap:10px;}
-  .avatar-preview{width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid var(--teal);background:#e8f5f3;flex-shrink:0;}
+  .avatar-upload{display:flex;align-items:center;gap:12px;}
+  .avatar-editor{width:96px;height:96px;border-radius:50%;background:#f8fafc;box-shadow:0 8px 22px rgba(15,23,42,.14);overflow:hidden;flex-shrink:0;cursor:grab;touch-action:none;position:relative;}
+  .avatar-editor:active{cursor:grabbing;}
+  .avatar-editor canvas{display:block;width:100%;height:100%;}
+  .avatar-tools{flex:1;min-width:0;}
+  .avatar-hint{font-size:11px;color:#94a3b8;margin-top:6px;line-height:1.5;}
+  .avatar-zoom{width:100%;margin-top:10px;accent-color:var(--teal);}
+  .import-box{border:1px dashed var(--border);border-radius:10px;background:#f8fafc;padding:12px;}
+  .import-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .import-note{font-size:11px;color:#94a3b8;line-height:1.6;margin-top:8px;}
   .btn-upload{padding:6px 12px;background:#f1f5f9;border:1px solid var(--border);border-radius:6px;font-size:12px;cursor:pointer;color:var(--muted);}
   .btn-upload:hover{background:#e2e8f0;}
   .textarea-review{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;color:var(--text);resize:vertical;min-height:60px;outline:none;}
@@ -48,6 +60,7 @@
   .generate-bar{padding:16px 24px;border-top:1px solid var(--border);flex-shrink:0;background:#fff;}
   .btn-generate{width:100%;padding:14px;background:linear-gradient(135deg,#18AD91,#2c34b6);color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;letter-spacing:.5px;transition:opacity .2s;}
   .btn-generate:hover{opacity:.9;}
+  .output-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;}
   .preview-bar{padding:12px 20px;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-shrink:0;}
   .preview-bar h2{font-size:13px;font-weight:600;color:var(--muted);margin-right:auto;}
   .btn-secondary,.btn-download{padding:8px 14px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;}
@@ -59,6 +72,7 @@
   @media(max-width:900px){
     .app{grid-template-columns:1fr;height:auto;overflow:auto;}
     .panel-left{border-right:none;}
+    .resize-handle{display:none;}
     .panel-right{height:720px;}
   }
 </style>
@@ -72,9 +86,20 @@
     </div>
 
     <div class="section">
+      <div class="section-label"><span></span>导入 Excel</div>
+      <div class="import-box">
+        <div class="import-actions">
+          <label class="btn-upload">上传 .xlsx<input type="file" accept=".xlsx,.xls" style="display:none" onchange="importExcel(this)"></label>
+          <label class="btn-upload">批量上传头像<input type="file" accept="image/*" multiple style="display:none" onchange="importAvatarImages(this)"></label>
+        </div>
+        <div class="import-note">支持读取：部门、季度、奖金、远程天数、考勤有效期、HR，以及 S/A 名单。批量头像会按图片文件名自动匹配 Excel 的头像文件名或姓名。</div>
+      </div>
+    </div>
+
+    <div class="section">
       <div class="section-label"><span></span>基本配置</div>
-      <div class="field"><label>中文部门名</label><input id="dept_cn" value="广告事业部"></div>
-      <div class="field"><label>英文/展示部门名</label><input id="dept" value="广告事业部"></div>
+      <div class="field"><label>中文部门名</label><input id="dept_cn" value="XX部门"></div>
+      <div class="field"><label>英文/展示部门名</label><input id="dept" value="XX Department"></div>
       <div class="field"><label>季度</label><input id="quarter" value="Q1"></div>
       <div class="field-row">
         <div class="field"><label>S级奖金（元）</label><input id="s_bonus" value="3500"></div>
@@ -85,7 +110,7 @@
         <div class="field"><label>A级远程天数</label><input id="a_remote" value="1"></div>
       </div>
       <div class="field"><label>考勤有效期</label><input id="date_range" value="5月1日-7月30日"></div>
-      <div class="field"><label>HR 联系人</label><input id="hr_name" value="HR-汤青露"></div>
+      <div class="field"><label>HR 联系人</label><input id="hr_name" value="HR-XXX"></div>
     </div>
 
     <div class="section">
@@ -102,15 +127,21 @@
 
     <div class="generate-bar">
       <button class="btn-generate" onclick="generate()">生成邮件预览</button>
+      <div class="output-actions">
+        <button class="btn-secondary" onclick="copyEmailHTML()">复制 HTML 文件内容</button>
+        <button class="btn-download" onclick="downloadEmail()">下载 HTML 文件</button>
+      </div>
       <div class="status" id="status"></div>
     </div>
   </div>
 
+  <div class="resize-handle" title="拖动调整左侧编辑栏宽度，双击恢复默认" onpointerdown="startPanelResize(event)" ondblclick="resetPanelWidth()"></div>
+
   <div class="panel-right">
     <div class="preview-bar">
       <h2>邮件预览</h2>
-      <button class="btn-secondary" onclick="copyEmailHTML()">复制 HTML</button>
-      <button class="btn-download" onclick="downloadEmail()">下载 HTML</button>
+      <button class="btn-secondary" onclick="copyEmailHTML()">复制 HTML 文件内容</button>
+      <button class="btn-download" onclick="downloadEmail()">下载 HTML 文件</button>
     </div>
     <iframe class="preview-frame" id="preview"></iframe>
   </div>
@@ -118,17 +149,98 @@
 
 <script>
 const PRESET_S = [
-  {name:"廖淑霞",dept:"广告事业部",award:"季度之星",review:"Q1展现了突出的执行力与实干精神。在技术资源有限的情况下独立完成OPPO厂商侧oRTB对接及Sellers.json部署，利用AI工具优化工作流，使周报效能提升90%。"}
+  {name:"S级获奖人",dept:"XX部门",award:"季度之星",review:"请在此填写绩效评语。"}
 ];
-const PRESET_A = [];
+const PRESET_A = [
+  {name:"A级获奖人1",dept:"XX部门"},
+  {name:"A级获奖人2",dept:"XX部门"},
+  {name:"A级获奖人3",dept:"XX部门"}
+];
 
 let sPersons = [], aPersons = [], emailHTML = "";
+let panelResize = null;
 
 function uid(){ return Math.random().toString(36).slice(2,8); }
 function escapeHtml(value){
   return String(value ?? "").replace(/[&<>"']/g, ch => ({
     "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
   }[ch]));
+}
+
+function setInputValue(id, value){
+  if(value === undefined || value === null || value === "") return;
+  const el = document.getElementById(id);
+  if(el) el.value = String(value).trim();
+}
+
+function normalizeHeader(value){
+  return String(value ?? "").replace(/\s+/g, "").toLowerCase();
+}
+
+function pickValue(row, aliases){
+  for(const key of Object.keys(row)){
+    const normalized = normalizeHeader(key);
+    if(aliases.some(alias => normalized === normalizeHeader(alias))){
+      return row[key];
+    }
+  }
+  return "";
+}
+
+function avatarMatchKey(value){
+  return String(value ?? "")
+    .replace(/\.[^.\\/]+$/, "")
+    .replace(/[\s_\-()（）【】\[\]]+/g, "")
+    .toLowerCase();
+}
+
+function clamp(value, min, max){
+  return Math.min(Math.max(value, min), max);
+}
+
+function setLeftPanelWidth(width){
+  const safeWidth = clamp(width, 340, Math.min(760, window.innerWidth - 360));
+  document.documentElement.style.setProperty("--left-panel-width", `${safeWidth}px`);
+  localStorage.setItem("awardToolLeftPanelWidth", String(safeWidth));
+}
+
+function loadLeftPanelWidth(){
+  const saved = Number(localStorage.getItem("awardToolLeftPanelWidth"));
+  if(saved) setLeftPanelWidth(saved);
+}
+
+function startPanelResize(event){
+  event.preventDefault();
+  const handle = event.currentTarget;
+  handle.setPointerCapture(event.pointerId);
+  handle.classList.add("dragging");
+  panelResize = {
+    pointerId:event.pointerId,
+    startX:event.clientX,
+    startWidth:document.querySelector(".panel-left").getBoundingClientRect().width,
+    handle
+  };
+  handle.addEventListener("pointermove", resizePanel);
+  handle.addEventListener("pointerup", stopPanelResize, {once:true});
+  handle.addEventListener("pointercancel", stopPanelResize, {once:true});
+}
+
+function resizePanel(event){
+  if(!panelResize || event.pointerId !== panelResize.pointerId) return;
+  setLeftPanelWidth(panelResize.startWidth + event.clientX - panelResize.startX);
+}
+
+function stopPanelResize(event){
+  if(!panelResize) return;
+  panelResize.handle.releasePointerCapture(event.pointerId);
+  panelResize.handle.removeEventListener("pointermove", resizePanel);
+  panelResize.handle.classList.remove("dragging");
+  panelResize = null;
+}
+
+function resetPanelWidth(){
+  localStorage.removeItem("awardToolLeftPanelWidth");
+  document.documentElement.style.setProperty("--left-panel-width", "460px");
 }
 
 function defaultAvatar(){
@@ -145,35 +257,86 @@ function defaultAvatar(){
   return canvas.toDataURL("image/jpeg", 0.85);
 }
 
-function cropAvatar(file){
+const avatarImageCache = new Map();
+let avatarDrag = null;
+
+function readFileAsDataURL(file){
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = reject;
-    reader.onload = () => {
-      const img = new Image();
-      img.onerror = reject;
-      img.onload = () => {
-        const size = Math.min(img.width, img.height);
-        const sx = (img.width - size) / 2;
-        const sy = (img.height - size) / 2;
-        const canvas = document.createElement("canvas");
-        canvas.width = 200;
-        canvas.height = 200;
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(img, sx, sy, size, size, 0, 0, 200, 200);
-        resolve(canvas.toDataURL("image/jpeg", 0.85));
-      };
-      img.src = reader.result;
-    };
+    reader.onload = () => resolve(reader.result);
     reader.readAsDataURL(file);
   });
+}
+
+function loadAvatarImage(src){
+  if(avatarImageCache.has(src)) return Promise.resolve(avatarImageCache.get(src));
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onerror = reject;
+    img.onload = () => {
+      avatarImageCache.set(src, img);
+      resolve(img);
+    };
+    img.src = src;
+  });
+}
+
+async function drawAvatarToCanvas(person, canvas){
+  const size = canvas.width || 200;
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, size, size);
+
+  if(!person.avatarOriginal){
+    const img = await loadAvatarImage(person.avatar || defaultAvatar());
+    ctx.drawImage(img, 0, 0, size, size);
+    return;
+  }
+
+  const img = await loadAvatarImage(person.avatarOriginal);
+  const baseScale = Math.max(size / img.width, size / img.height);
+  const zoom = Number(person.avatarScale || 1);
+  const drawW = img.width * baseScale * zoom;
+  const drawH = img.height * baseScale * zoom;
+  const dx = (size - drawW) / 2 + Number(person.avatarX || 0) * (size / 200);
+  const dy = (size - drawH) / 2 + Number(person.avatarY || 0) * (size / 200);
+  ctx.drawImage(img, dx, dy, drawW, drawH);
+}
+
+async function updateAvatarCrop(person){
+  const canvas = document.createElement("canvas");
+  canvas.width = 200;
+  canvas.height = 200;
+  await drawAvatarToCanvas(person, canvas);
+  person.avatar = canvas.toDataURL("image/jpeg", 0.85);
 }
 
 function addPerson(level, data={}){
   const id = uid();
   const arr = level === "s" ? sPersons : aPersons;
-  arr.push({id, name:data.name||"", dept:data.dept||"", award:data.award||"季度之星", review:data.review||"", avatar:data.avatar||""});
+  arr.push({
+    id,
+    name:data.name||"",
+    dept:data.dept||"",
+    award:data.award||"季度之星",
+    review:data.review||"",
+    avatarFile:data.avatarFile||"",
+    avatar:data.avatar||"",
+    avatarOriginal:data.avatarOriginal||"",
+    avatarX:data.avatarX||0,
+    avatarY:data.avatarY||0,
+    avatarScale:data.avatarScale||1
+  });
   renderList(level);
+}
+
+function resetPeople(){
+  sPersons = [];
+  aPersons = [];
+  renderList("s");
+  renderList("a");
 }
 
 function removePerson(level, id){
@@ -185,7 +348,7 @@ function removePerson(level, id){
 
 function toggleCard(id){
   const body = document.getElementById("body-" + id);
-  if(body) body.classList.toggle("open");
+  if(body) body.classList.add("open");
 }
 
 function renderList(level){
@@ -208,8 +371,14 @@ function renderList(level){
       <div class="field">
         <label>头像</label>
         <div class="avatar-upload">
-          <img class="avatar-preview" id="av-${p.id}" ${thumbSrc} onerror="this.style.opacity=0">
-          <label class="btn-upload">上传头像<input type="file" accept="image/*" style="display:none" onchange="uploadAvatar('${p.id}',this)"></label>
+          <div class="avatar-editor" onpointerdown="startAvatarDrag(event,'${p.id}')">
+            <canvas id="av-${p.id}" width="200" height="200"></canvas>
+          </div>
+          <div class="avatar-tools">
+            <label class="btn-upload">上传头像<input type="file" accept="image/*" style="display:none" onchange="uploadAvatar('${p.id}',this)"></label>
+            <input class="avatar-zoom" type="range" min="1" max="2.5" step="0.01" value="${p.avatarScale || 1}" oninput="updateAvatarZoom('${p.id}',this.value)">
+            <div class="avatar-hint">拖动头像调整上下左右位置，滑动调节缩放。${p.avatarFile ? `匹配名：${escapeHtml(p.avatarFile)}` : ""}</div>
+          </div>
         </div>
       </div>` : "";
     return `
@@ -232,6 +401,7 @@ function renderList(level){
         </div>
       </div>`;
   }).join("");
+  renderAvatarEditors(level);
 }
 
 function updateField(level, id, key, val){
@@ -242,14 +412,232 @@ function updateField(level, id, key, val){
   generate();
 }
 
+function findSPerson(id){
+  return sPersons.find(p => p.id === id);
+}
+
+function renderAvatarEditors(level){
+  if(level !== "s") return;
+  sPersons.forEach(person => {
+    const canvas = document.getElementById("av-" + person.id);
+    if(canvas) drawAvatarToCanvas(person, canvas);
+  });
+}
+
 async function uploadAvatar(id, input){
   const file = input.files[0];
   if(!file) return;
-  const src = await cropAvatar(file);
-  const person = sPersons.find(p => p.id === id);
-  if(person) person.avatar = src;
+  const person = findSPerson(id);
+  if(!person) return;
+  await setPersonAvatarFromFile(person, file);
   renderList("s");
   generate();
+}
+
+async function setPersonAvatarFromFile(person, file){
+  person.avatarOriginal = await readFileAsDataURL(file);
+  person.avatarX = 0;
+  person.avatarY = 0;
+  person.avatarScale = 1;
+  await updateAvatarCrop(person);
+}
+
+async function importAvatarImages(input){
+  const files = Array.from(input.files || []);
+  if(!files.length) return;
+
+  const personByKey = new Map();
+  sPersons.forEach(person => {
+    [person.avatarFile, person.name].forEach(value => {
+      const key = avatarMatchKey(value);
+      if(key && !personByKey.has(key)) personByKey.set(key, person);
+    });
+  });
+
+  let matched = 0;
+  const unmatched = [];
+  for(const file of files){
+    const person = personByKey.get(avatarMatchKey(file.name));
+    if(!person){
+      unmatched.push(file.name);
+      continue;
+    }
+    await setPersonAvatarFromFile(person, file);
+    matched += 1;
+  }
+
+  renderList("s");
+  generate();
+  const msg = unmatched.length ? `，未匹配：${unmatched.slice(0, 5).join("、")}${unmatched.length > 5 ? "等" : ""}` : "";
+  document.getElementById("status").textContent = `已自动匹配头像 ${matched}/${files.length} 张${msg}。`;
+  input.value = "";
+}
+
+async function updateAvatarZoom(id, value){
+  const person = findSPerson(id);
+  if(!person) return;
+  person.avatarScale = Number(value);
+  await updateAvatarCrop(person);
+  renderAvatarEditors("s");
+  const thumb = document.getElementById("thumb-" + id);
+  if(thumb) thumb.src = person.avatar;
+  generate();
+}
+
+function startAvatarDrag(event, id){
+  const person = findSPerson(id);
+  if(!person || !person.avatarOriginal) return;
+  event.preventDefault();
+  const editor = event.currentTarget;
+  editor.setPointerCapture(event.pointerId);
+  avatarDrag = {
+    id,
+    pointerId:event.pointerId,
+    lastX:event.clientX,
+    lastY:event.clientY,
+    editor
+  };
+  editor.addEventListener("pointermove", dragAvatar);
+  editor.addEventListener("pointerup", stopAvatarDrag, {once:true});
+  editor.addEventListener("pointercancel", stopAvatarDrag, {once:true});
+}
+
+async function dragAvatar(event){
+  if(!avatarDrag || event.pointerId !== avatarDrag.pointerId) return;
+  const person = findSPerson(avatarDrag.id);
+  if(!person) return;
+  const rect = avatarDrag.editor.getBoundingClientRect();
+  const ratio = 200 / rect.width;
+  person.avatarX += (event.clientX - avatarDrag.lastX) * ratio;
+  person.avatarY += (event.clientY - avatarDrag.lastY) * ratio;
+  avatarDrag.lastX = event.clientX;
+  avatarDrag.lastY = event.clientY;
+  await updateAvatarCrop(person);
+  renderAvatarEditors("s");
+  const thumb = document.getElementById("thumb-" + person.id);
+  if(thumb) thumb.src = person.avatar;
+  generate();
+}
+
+function stopAvatarDrag(event){
+  if(!avatarDrag) return;
+  avatarDrag.editor.releasePointerCapture(event.pointerId);
+  avatarDrag.editor.removeEventListener("pointermove", dragAvatar);
+  avatarDrag = null;
+}
+
+function parseConfigRows(rows){
+  rows.forEach(row => {
+    const key = normalizeHeader(row[0]);
+    const value = row[1];
+    if(["级别","姓名","level","name"].includes(key)) return;
+    if(!key || value === undefined || value === null || value === "") return;
+    if(["中文部门名","部门中文名","部门","主标题部门名","deptcn"].includes(key)) setInputValue("dept_cn", value);
+    if(["英文部门名","展示部门名","部门英文名","副标题英文部门","dept","department"].includes(key)) setInputValue("dept", value);
+    if(["季度","quarter"].includes(key)) setInputValue("quarter", value);
+    if(["s级奖金","s奖金","s_bonus","sbonus"].includes(key)) setInputValue("s_bonus", value);
+    if(["a级奖金","a奖金","a_bonus","abonus"].includes(key)) setInputValue("a_bonus", value);
+    if(["s级远程天数","s远程天数","s_remote","sremote"].includes(key)) setInputValue("s_remote", value);
+    if(["a级远程天数","a远程天数","a_remote","aremote"].includes(key)) setInputValue("a_remote", value);
+    if(["考勤有效期","有效期","daterange","date_range"].includes(key)) setInputValue("date_range", value);
+    if(["hr联系人","hr","联系人","hr_name","hrname"].includes(key)) setInputValue("hr_name", value);
+  });
+}
+
+function findPeopleSheet(workbook){
+  const preferred = workbook.SheetNames.find(name => /名单|people|award|list/i.test(name));
+  return preferred || workbook.SheetNames[0];
+}
+
+function importPeopleRows(rows){
+  resetPeople();
+  rows.forEach(row => {
+    const rawLevel = String(pickValue(row, ["级别","绩效级别","level","等级"]) || "").toUpperCase();
+    const name = String(pickValue(row, ["姓名","name","员工姓名"]) || "").trim();
+    if(!name) return;
+    const dept = String(pickValue(row, ["部门","dept","department"]) || "").trim();
+    const award = String(pickValue(row, ["奖项","award"]) || "季度之星").trim();
+    const review = String(pickValue(row, ["评语","绩效评语","review","comment"]) || "").trim();
+    const avatarFile = String(pickValue(row, ["头像文件名","头像","avatar","avatarfile","图片文件名"]) || "").trim();
+    if(rawLevel.includes("A")){
+      addPerson("a", {name, dept, avatarFile});
+    }else{
+      addPerson("s", {name, dept, award, review, avatarFile});
+    }
+  });
+}
+
+function hasSectionedAwardRows(rows){
+  return rows.some(row => /S\s*级获奖名单|A\s*级获奖名单/i.test(String(row[0] || "")));
+}
+
+function importSectionedAwardRows(rows){
+  resetPeople();
+  let mode = "";
+  rows.forEach(row => {
+    const marker = String(row[0] || "").trim();
+    if(/S\s*级获奖名单/i.test(marker)){
+      mode = "s";
+      return;
+    }
+    if(/A\s*级获奖名单/i.test(marker)){
+      mode = "a";
+      return;
+    }
+    if(!mode || !marker || marker === "姓名" || marker.startsWith("（")) return;
+
+    const name = String(row[0] || "").trim();
+    const dept = String(row[1] || "").trim();
+    if(!name) return;
+
+    if(mode === "s"){
+      addPerson("s", {
+        name,
+        dept,
+        award:String(row[2] || "季度之星").trim(),
+        review:String(row[3] || "").trim(),
+        avatarFile:String(row[4] || "").trim()
+      });
+    }else{
+      addPerson("a", {name, dept, avatarFile:String(row[4] || "").trim()});
+    }
+  });
+}
+
+async function importExcel(input){
+  const file = input.files[0];
+  if(!file) return;
+  if(!window.XLSX){
+    document.getElementById("status").textContent = "Excel 解析库加载失败，请检查网络后重试。";
+    return;
+  }
+  const buffer = await file.arrayBuffer();
+  const workbook = XLSX.read(buffer, {type:"array"});
+  const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+  const firstRows = XLSX.utils.sheet_to_json(firstSheet, {header:1, blankrows:false, defval:""});
+
+  if(workbook.Sheets["配置"]){
+    parseConfigRows(XLSX.utils.sheet_to_json(workbook.Sheets["配置"], {header:1, blankrows:false}));
+  }else{
+    parseConfigRows(firstRows.slice(0, 20));
+  }
+
+  if(hasSectionedAwardRows(firstRows)){
+    importSectionedAwardRows(firstRows);
+  }else{
+    const peopleSheetName = workbook.Sheets["名单"] ? "名单" : findPeopleSheet(workbook);
+    const peopleRows = XLSX.utils.sheet_to_json(workbook.Sheets[peopleSheetName], {defval:""});
+    importPeopleRows(peopleRows);
+  }
+
+  const first = sPersons[0];
+  if(first){
+    const body = document.getElementById("body-" + first.id);
+    if(body) body.classList.add("open");
+  }
+  generate();
+  document.getElementById("status").textContent = `已从 ${file.name} 导入：S ${sPersons.length} 位，A ${aPersons.length} 位。`;
+  input.value = "";
 }
 
 function emailCss(){
@@ -268,7 +656,7 @@ function emailCss(){
   .section-title-s,.section-title-a{font-size:18px;font-weight:800;margin:0 0 16px;padding-left:12px;border-left:4px solid #18AD91;}
   .awardee-list{margin:0;padding:0;}
   .awardee-block{margin:0 0 14px;}
-  .avatar{display:block;width:68px;height:68px;border-radius:50%;border:3px solid #18AD91;object-fit:cover;margin:0 0 10px;background:#e8f5f3;}
+  .avatar{display:block;width:68px;height:68px;border-radius:50%;object-fit:cover;margin:0 0 10px;background:#f8fafc;box-shadow:0 6px 18px rgba(15,23,42,.16);}
   .award-card{background:#fff;border:1px solid #dde8f0;border-radius:10px;overflow:hidden;}
   .award-card--split{display:flex;flex-direction:row;align-items:stretch;text-align:left;}
   .award-card-left{flex:0 0 160px;width:160px;padding:20px 16px;border-right:1px solid #e8edf3;background:#f4f8fb;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;}
@@ -310,8 +698,20 @@ function buildEmail(data){
       </div>`;
   }).join("");
 
+  const sSection = data.s_list.length ? `
+    <div class="section-title-s"><span class="highlight-s">绩效 S 级</span></div>
+    <div class="awardee-list">${sCards}</div>
+    <div class="reward-notice">
+      <p class="reward-notice__lead">恭喜以上同学获得 <span class="highlight-s">绩效S</span> 奖励：</p>
+      <ol class="reward-notice__list">
+        <li>管理先锋/季度之星 奖金 RMB ${escapeHtml(data.s_bonus)} ，随工资合并计税发放；</li>
+        <li>远程办公 &nbsp;${escapeHtml(data.s_remote)}&nbsp; 天，详见考勤特权使用说明；</li>
+        <li>&nbsp;${escapeHtml(data.date_range)} 期间弹性考勤，详见考勤特权使用说明。</li>
+      </ol>
+    </div>` : "";
+
   const aSection = data.a_list.length ? `
-    <hr class="divider">
+    ${data.s_list.length ? '<hr class="divider">' : ''}
     <div class="a-level-module">
       <div class="section-title-a"><span class="highlight-a">绩效 A 级</span></div>
       <ul class="a-level-name-list">${data.a_list.map(p => `<li><span style="width:8px;height:8px;border-radius:50%;background:linear-gradient(135deg,#18AD91,#2477a8);display:inline-block;flex-shrink:0;"></span><span>${escapeHtml(p.name)}</span></li>`).join("")}</ul>
@@ -339,16 +739,7 @@ function buildEmail(data){
   </div>
   <div class="email-body">
     <p class="greeting">Dear，<br>经绩效评审，以下同学评为 S/A，现予以部门公开表彰，以资鼓励！让我们对以下小伙伴表示热烈祝贺！</p>
-    <div class="section-title-s"><span class="highlight-s">绩效 S 级</span></div>
-    <div class="awardee-list">${sCards}</div>
-    <div class="reward-notice">
-      <p class="reward-notice__lead">恭喜以上同学获得 <span class="highlight-s">绩效S</span> 奖励：</p>
-      <ol class="reward-notice__list">
-        <li>管理先锋/季度之星 奖金 RMB ${escapeHtml(data.s_bonus)} ，随工资合并计税发放；</li>
-        <li>远程办公 &nbsp;${escapeHtml(data.s_remote)}&nbsp; 天，详见考勤特权使用说明；</li>
-        <li>&nbsp;${escapeHtml(data.date_range)} 期间弹性考勤，详见考勤特权使用说明。</li>
-      </ol>
-    </div>
+    ${sSection}
     ${aSection}
     <hr class="divider">
     <div class="attendance-guide">
@@ -396,19 +787,39 @@ function downloadEmail(){
   if(!emailHTML) generate();
   const blob = new Blob([emailHTML], {type:"text/html;charset=utf-8"});
   const a = document.createElement("a");
+  const dept = document.getElementById("dept_cn").value.trim() || "极光表彰";
+  const quarter = document.getElementById("quarter").value.trim() || "Q";
   a.href = URL.createObjectURL(blob);
-  a.download = "output_email.html";
+  a.download = `${dept}_${quarter}_绩效表彰邮件.html`;
   a.click();
   URL.revokeObjectURL(a.href);
+  document.getElementById("status").textContent = "HTML 文件已下载。";
 }
 
 async function copyEmailHTML(){
   if(!emailHTML) generate();
-  await navigator.clipboard.writeText(emailHTML);
-  document.getElementById("status").textContent = "HTML 已复制。";
+  try{
+    if(navigator.clipboard && window.isSecureContext){
+      await navigator.clipboard.writeText(emailHTML);
+    }else{
+      const textarea = document.createElement("textarea");
+      textarea.value = emailHTML;
+      textarea.style.position = "fixed";
+      textarea.style.left = "-9999px";
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      document.execCommand("copy");
+      textarea.remove();
+    }
+    document.getElementById("status").textContent = "HTML 文件内容已复制，可粘贴到邮件源码模式。";
+  }catch(err){
+    document.getElementById("status").textContent = "复制失败，请点击下载 HTML 文件后使用。";
+  }
 }
 
 window.onload = () => {
+  loadLeftPanelWidth();
   PRESET_S.forEach(d => addPerson("s", d));
   PRESET_A.forEach(d => addPerson("a", d));
   const first = sPersons[0];
