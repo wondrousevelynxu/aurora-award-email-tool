@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>极光表彰邮件生成器</title>
+<style>
+  :root{
+    --teal:#18AD91;--blue:#2477a8;--navy:#2c34b6;
+    --bg:#f0f4f8;--card:#fff;--border:#e2e8f0;--text:#1e293b;--muted:#64748b;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);font-family:"PingFang SC","Microsoft YaHei",sans-serif;color:var(--text);min-height:100vh;}
+  .app{display:grid;grid-template-columns:460px 1fr;height:100vh;overflow:hidden;}
+  .panel-left{overflow-y:auto;background:var(--card);border-right:1px solid var(--border);display:flex;flex-direction:column;}
+  .panel-right{overflow:hidden;background:#e8ecf0;display:flex;flex-direction:column;}
+  .left-header{padding:20px 24px 16px;background:linear-gradient(135deg,#18AD91,#2c34b6);color:#fff;flex-shrink:0;}
+  .left-header h1{font-size:18px;font-weight:700;letter-spacing:1px;}
+  .left-header p{font-size:12px;opacity:.8;margin-top:4px;}
+  .section{padding:16px 24px;border-bottom:1px solid var(--border);}
+  .section-label{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:12px;display:flex;align-items:center;gap:6px;}
+  .section-label span{width:3px;height:14px;background:var(--teal);border-radius:2px;display:inline-block;}
+  .field{margin-bottom:12px;}
+  .field label{font-size:12px;color:var(--muted);font-weight:600;display:block;margin-bottom:4px;}
+  .field input,.field select{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit;color:var(--text);background:#fff;outline:none;transition:border .2s;}
+  .field input:focus,.field select:focus{border-color:var(--teal);}
+  .field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .person-list{display:flex;flex-direction:column;gap:8px;}
+  .person-card{border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+  .person-card-header{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#f8fafc;cursor:pointer;user-select:none;}
+  .person-avatar-thumb{width:36px;height:36px;border-radius:50%;object-fit:cover;border:2px solid var(--teal);flex-shrink:0;background:#e8f5f3;}
+  .person-info{flex:1;min-width:0;}
+  .person-name{font-size:13px;font-weight:600;color:var(--text);}
+  .person-badge{font-size:11px;padding:2px 8px;border-radius:999px;background:linear-gradient(135deg,var(--teal),var(--navy));color:#fff;font-weight:600;}
+  .person-card-body{padding:12px;border-top:1px solid var(--border);display:none;}
+  .person-card-body.open{display:block;}
+  .person-card-body .field{margin-bottom:8px;}
+  .avatar-upload{display:flex;align-items:center;gap:10px;}
+  .avatar-preview{width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid var(--teal);background:#e8f5f3;flex-shrink:0;}
+  .btn-upload{padding:6px 12px;background:#f1f5f9;border:1px solid var(--border);border-radius:6px;font-size:12px;cursor:pointer;color:var(--muted);}
+  .btn-upload:hover{background:#e2e8f0;}
+  .textarea-review{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;color:var(--text);resize:vertical;min-height:60px;outline:none;}
+  .textarea-review:focus{border-color:var(--teal);}
+  .btn-add{width:100%;padding:8px;border:2px dashed var(--border);border-radius:8px;background:none;font-size:13px;color:var(--muted);cursor:pointer;transition:all .2s;margin-top:4px;}
+  .btn-add:hover{border-color:var(--teal);color:var(--teal);background:#f0faf8;}
+  .btn-remove{padding:4px 8px;background:#fff0f0;border:1px solid #fecaca;border-radius:4px;font-size:11px;color:#ef4444;cursor:pointer;margin-left:auto;}
+  .btn-remove:hover{background:#fee2e2;}
+  .generate-bar{padding:16px 24px;border-top:1px solid var(--border);flex-shrink:0;background:#fff;}
+  .btn-generate{width:100%;padding:14px;background:linear-gradient(135deg,#18AD91,#2c34b6);color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;letter-spacing:.5px;transition:opacity .2s;}
+  .btn-generate:hover{opacity:.9;}
+  .preview-bar{padding:12px 20px;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-shrink:0;}
+  .preview-bar h2{font-size:13px;font-weight:600;color:var(--muted);margin-right:auto;}
+  .btn-secondary,.btn-download{padding:8px 14px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;}
+  .btn-secondary{background:#e2e8f0;color:#334155;}
+  .btn-download{background:var(--teal);color:#fff;}
+  .btn-download:hover{background:#15967e;}
+  .preview-frame{flex:1;border:none;background:#fff;}
+  .status{font-size:12px;color:var(--teal);font-weight:600;margin-top:6px;min-height:18px;}
+  @media(max-width:900px){
+    .app{grid-template-columns:1fr;height:auto;overflow:auto;}
+    .panel-left{border-right:none;}
+    .panel-right{height:720px;}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="panel-left">
+    <div class="left-header">
+      <h1>极光表彰邮件生成器</h1>
+      <p>纯前端版本：填写信息 -> 生成预览 -> 下载 HTML</p>
+    </div>
+
+    <div class="section">
+      <div class="section-label"><span></span>基本配置</div>
+      <div class="field"><label>中文部门名</label><input id="dept_cn" value="广告事业部"></div>
+      <div class="field"><label>英文/展示部门名</label><input id="dept" value="广告事业部"></div>
+      <div class="field"><label>季度</label><input id="quarter" value="Q1"></div>
+      <div class="field-row">
+        <div class="field"><label>S级奖金（元）</label><input id="s_bonus" value="3500"></div>
+        <div class="field"><label>A级奖金（元）</label><input id="a_bonus" value="2000"></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>S级远程天数</label><input id="s_remote" value="2"></div>
+        <div class="field"><label>A级远程天数</label><input id="a_remote" value="1"></div>
+      </div>
+      <div class="field"><label>考勤有效期</label><input id="date_range" value="5月1日-7月30日"></div>
+      <div class="field"><label>HR 联系人</label><input id="hr_name" value="HR-汤青露"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-label"><span></span>S 级名单</div>
+      <div class="person-list" id="s-list"></div>
+      <button class="btn-add" onclick="addPerson('s')">+ 添加 S 级获奖人</button>
+    </div>
+
+    <div class="section">
+      <div class="section-label"><span></span>A 级名单</div>
+      <div class="person-list" id="a-list"></div>
+      <button class="btn-add" onclick="addPerson('a')">+ 添加 A 级获奖人</button>
+    </div>
+
+    <div class="generate-bar">
+      <button class="btn-generate" onclick="generate()">生成邮件预览</button>
+      <div class="status" id="status"></div>
+    </div>
+  </div>
+
+  <div class="panel-right">
+    <div class="preview-bar">
+      <h2>邮件预览</h2>
+      <button class="btn-secondary" onclick="copyEmailHTML()">复制 HTML</button>
+      <button class="btn-download" onclick="downloadEmail()">下载 HTML</button>
+    </div>
+    <iframe class="preview-frame" id="preview"></iframe>
+  </div>
+</div>
+
+<script>
+const PRESET_S = [
+  {name:"廖淑霞",dept:"广告事业部",award:"季度之星",review:"Q1展现了突出的执行力与实干精神。在技术资源有限的情况下独立完成OPPO厂商侧oRTB对接及Sellers.json部署，利用AI工具优化工作流，使周报效能提升90%。"}
+];
+const PRESET_A = [];
+
+let sPersons = [], aPersons = [], emailHTML = "";
+
+function uid(){ return Math.random().toString(36).slice(2,8); }
+function escapeHtml(value){
+  return String(value ?? "").replace(/[&<>"']/g, ch => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[ch]));
+}
+
+function defaultAvatar(){
+  const canvas = document.createElement("canvas");
+  canvas.width = 200;
+  canvas.height = 200;
+  const ctx = canvas.getContext("2d");
+  const gradient = ctx.createLinearGradient(0,0,200,200);
+  gradient.addColorStop(0,"#18AD91");
+  gradient.addColorStop(0.5,"#2477a8");
+  gradient.addColorStop(1,"#2c34b6");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0,0,200,200);
+  return canvas.toDataURL("image/jpeg", 0.85);
+}
+
+function cropAvatar(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        const size = Math.min(img.width, img.height);
+        const sx = (img.width - size) / 2;
+        const sy = (img.height - size) / 2;
+        const canvas = document.createElement("canvas");
+        canvas.width = 200;
+        canvas.height = 200;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, sx, sy, size, size, 0, 0, 200, 200);
+        resolve(canvas.toDataURL("image/jpeg", 0.85));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function addPerson(level, data={}){
+  const id = uid();
+  const arr = level === "s" ? sPersons : aPersons;
+  arr.push({id, name:data.name||"", dept:data.dept||"", award:data.award||"季度之星", review:data.review||"", avatar:data.avatar||""});
+  renderList(level);
+}
+
+function removePerson(level, id){
+  if(level === "s") sPersons = sPersons.filter(p => p.id !== id);
+  else aPersons = aPersons.filter(p => p.id !== id);
+  renderList(level);
+  generate();
+}
+
+function toggleCard(id){
+  const body = document.getElementById("body-" + id);
+  if(body) body.classList.toggle("open");
+}
+
+function renderList(level){
+  const arr = level === "s" ? sPersons : aPersons;
+  const el = document.getElementById(level + "-list");
+  el.innerHTML = arr.map(p => {
+    const thumbSrc = p.avatar ? `src="${p.avatar}"` : "";
+    const awardOpts = ["管理先锋","季度之星"].map(v => `<option${v === p.award ? " selected" : ""}>${v}</option>`).join("");
+    const awardField = level === "s" ? `
+      <div class="field">
+        <label>奖项</label>
+        <select onchange="updateField('${level}','${p.id}','award',this.value)">${awardOpts}</select>
+      </div>` : "";
+    const reviewField = level === "s" ? `
+      <div class="field">
+        <label>绩效评语</label>
+        <textarea class="textarea-review" rows="3" onchange="updateField('${level}','${p.id}','review',this.value)">${escapeHtml(p.review)}</textarea>
+      </div>` : "";
+    const avatarField = level === "s" ? `
+      <div class="field">
+        <label>头像</label>
+        <div class="avatar-upload">
+          <img class="avatar-preview" id="av-${p.id}" ${thumbSrc} onerror="this.style.opacity=0">
+          <label class="btn-upload">上传头像<input type="file" accept="image/*" style="display:none" onchange="uploadAvatar('${p.id}',this)"></label>
+        </div>
+      </div>` : "";
+    return `
+      <div class="person-card" id="card-${p.id}">
+        <div class="person-card-header" onclick="toggleCard('${p.id}')">
+          <img class="person-avatar-thumb" id="thumb-${p.id}" ${thumbSrc} onerror="this.style.opacity=.3">
+          <div class="person-info">
+            <div class="person-name">${escapeHtml(p.name) || "（未填写姓名）"}</div>
+            <div style="font-size:11px;color:#94a3b8;margin-top:2px;">${escapeHtml(p.dept)}</div>
+          </div>
+          ${level === "s" ? `<span class="person-badge">${escapeHtml(p.award)}</span>` : '<span style="font-size:11px;color:#64748b;">A级</span>'}
+          <button class="btn-remove" onclick="event.stopPropagation();removePerson('${level}','${p.id}')">x</button>
+        </div>
+        <div class="person-card-body" id="body-${p.id}">
+          <div class="field"><label>姓名</label><input value="${escapeHtml(p.name)}" oninput="updateField('${level}','${p.id}','name',this.value)"></div>
+          <div class="field"><label>部门</label><input value="${escapeHtml(p.dept)}" oninput="updateField('${level}','${p.id}','dept',this.value)"></div>
+          ${awardField}
+          ${reviewField}
+          ${avatarField}
+        </div>
+      </div>`;
+  }).join("");
+}
+
+function updateField(level, id, key, val){
+  const arr = level === "s" ? sPersons : aPersons;
+  const person = arr.find(p => p.id === id);
+  if(person) person[key] = val;
+  renderList(level);
+  generate();
+}
+
+async function uploadAvatar(id, input){
+  const file = input.files[0];
+  if(!file) return;
+  const src = await cropAvatar(file);
+  const person = sPersons.find(p => p.id === id);
+  if(person) person.avatar = src;
+  renderList("s");
+  generate();
+}
+
+function emailCss(){
+  return `
+  *{box-sizing:border-box;}
+  body,table,td,p,a,li{-webkit-text-size-adjust:100%;}
+  body{margin:0;padding:0;width:100%!important;background:#f0f2f5;font-family:"PingFang SC","Microsoft YaHei","Noto Sans SC",sans-serif;}
+  img{border:0;outline:none;text-decoration:none;}
+  .email-wrapper{width:100%;background:#f0f2f5;padding:40px 0;}
+  .email-container{max-width:680px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.06);}
+  .header-banner{background:linear-gradient(135deg,#18AD91 0%,#199c99 33%,#2477a8 66%,#2c34b6 100%);padding:40px 40px 36px;color:#fff;text-align:center;position:relative;overflow:hidden;}
+  .header-banner .title{font-size:24px;font-weight:700;letter-spacing:2px;margin:0;line-height:1.4;}
+  .header-banner .subtitle{font-size:14px;opacity:.75;margin-top:8px;letter-spacing:.5px;}
+  .email-body{padding:36px 40px 20px;font-size:14px;line-height:1.65;}
+  .greeting{font-size:14px;color:#4a5568;margin:0 0 28px 0;line-height:1.8;}
+  .section-title-s,.section-title-a{font-size:18px;font-weight:800;margin:0 0 16px;padding-left:12px;border-left:4px solid #18AD91;}
+  .awardee-list{margin:0;padding:0;}
+  .awardee-block{margin:0 0 14px;}
+  .avatar{display:block;width:68px;height:68px;border-radius:50%;border:3px solid #18AD91;object-fit:cover;margin:0 0 10px;background:#e8f5f3;}
+  .award-card{background:#fff;border:1px solid #dde8f0;border-radius:10px;overflow:hidden;}
+  .award-card--split{display:flex;flex-direction:row;align-items:stretch;text-align:left;}
+  .award-card-left{flex:0 0 160px;width:160px;padding:20px 16px;border-right:1px solid #e8edf3;background:#f4f8fb;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;}
+  .award-card-right{flex:1 1 0;padding:18px 22px;background:#fff;display:flex;flex-direction:column;justify-content:center;}
+  .award-eval-text{margin:0;font-size:13.5px;color:#4b5d73;line-height:1.8;}
+  .awardee-name{font-size:15px;font-weight:700;color:#0f172a;margin:0 0 8px;}
+  .award-badge{display:inline-block;background:linear-gradient(135deg,#18AD91 0%,#199c99 33%,#2477a8 66%,#2c34b6 100%);color:#fff;font-size:12px;font-weight:600;padding:4px 12px;border-radius:999px;letter-spacing:.06em;white-space:nowrap;}
+  .reward-notice{font-size:14px;color:#475569;line-height:1.8;margin:18px 0 0;}
+  .reward-notice__lead{margin:0 0 6px;color:#475569;font-weight:400;font-size:14px;line-height:1.8;}
+  .highlight-s,.highlight-a{background:linear-gradient(135deg,#18AD91,#2477a8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-weight:800;}
+  .reward-notice__list{margin:0;padding:0 0 0 1.35em;font-size:14px;color:#475569;line-height:1.8;}
+  .reward-notice__list li{margin:0 0 2px;padding-left:.2em;color:#475569;font-size:14px;line-height:1.8;}
+  .divider{border:none;border-top:1px solid #e2e8f0;margin:30px 0;}
+  .a-level-name-list{margin:0 0 22px;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:8px;}
+  .a-level-name-list li{background:#fff;border:1px solid #dde8f0;border-radius:10px;padding:14px 16px;font-size:15px;font-weight:600;color:#0f172a;display:flex;align-items:center;gap:10px;flex:0 0 calc(25% - 6px);box-sizing:border-box;}
+  .attendance-guide{font-size:14px;color:#475569;margin:0 0 18px;}
+  .attendance-guide__title{font-weight:400;color:#475569;margin:0 0 8px;font-size:14px;}
+  .attendance-guide p{margin:0 0 8px;}
+  .attendance-guide p:last-child{margin-bottom:0;}
+  .attendance-guide__sub{padding-left:1.1em;}
+  .email-footer{background:#f7fafc;padding:20px 40px;text-align:center;border-top:1px solid #e2e8f0;}
+  .email-footer p{font-size:12px;color:#a0aec0;margin:0;line-height:1.6;}
+  `;
+}
+
+function buildEmail(data){
+  const sCards = data.s_list.map(p => {
+    const review = p.review ? `<p class="award-eval-text">${escapeHtml(p.review)}</p>` : '<p class="award-eval-text" style="color:#aaa;font-style:italic;">暂无评语</p>';
+    return `
+      <div class="awardee-block">
+        <div class="award-card award-card--split">
+          <div class="award-card-left">
+            <img src="${p.avatar || defaultAvatar()}" class="avatar" width="68" height="68" alt="${escapeHtml(p.name)}">
+            <div class="awardee-name">${escapeHtml(p.name)}</div>
+            <span class="award-badge">${escapeHtml(p.award)}</span>
+          </div>
+          <div class="award-card-right">${review}</div>
+        </div>
+      </div>`;
+  }).join("");
+
+  const aSection = data.a_list.length ? `
+    <hr class="divider">
+    <div class="a-level-module">
+      <div class="section-title-a"><span class="highlight-a">绩效 A 级</span></div>
+      <ul class="a-level-name-list">${data.a_list.map(p => `<li><span style="width:8px;height:8px;border-radius:50%;background:linear-gradient(135deg,#18AD91,#2477a8);display:inline-block;flex-shrink:0;"></span><span>${escapeHtml(p.name)}</span></li>`).join("")}</ul>
+      <div class="reward-notice">
+        <p class="reward-notice__lead">恭喜以上同学获得 <span class="highlight-a">绩效A</span> 奖励：</p>
+        <ol class="reward-notice__list">
+          <li>绩优绩效奖金 RMB ${escapeHtml(data.a_bonus)} ，随工资合并计税发放；</li>
+          <li>远程办公 &nbsp;${escapeHtml(data.a_remote)}&nbsp; 天，详见考勤特权使用说明。</li>
+        </ol>
+      </div>
+    </div>` : "";
+
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>${escapeHtml(data.title)}</title>
+<style>${emailCss()}</style>
+</head>
+<body>
+<div class="email-wrapper"><div class="email-container">
+  <div class="header-banner">
+    <h1 class="title">${escapeHtml(data.title)}</h1>
+    <div class="subtitle">${escapeHtml(data.quarter)} 2026 Performance Recognition（${escapeHtml(data.dept)}）</div>
+  </div>
+  <div class="email-body">
+    <p class="greeting">Dear，<br>经绩效评审，以下同学评为 S/A，现予以部门公开表彰，以资鼓励！让我们对以下小伙伴表示热烈祝贺！</p>
+    <div class="section-title-s"><span class="highlight-s">绩效 S 级</span></div>
+    <div class="awardee-list">${sCards}</div>
+    <div class="reward-notice">
+      <p class="reward-notice__lead">恭喜以上同学获得 <span class="highlight-s">绩效S</span> 奖励：</p>
+      <ol class="reward-notice__list">
+        <li>管理先锋/季度之星 奖金 RMB ${escapeHtml(data.s_bonus)} ，随工资合并计税发放；</li>
+        <li>远程办公 &nbsp;${escapeHtml(data.s_remote)}&nbsp; 天，详见考勤特权使用说明；</li>
+        <li>&nbsp;${escapeHtml(data.date_range)} 期间弹性考勤，详见考勤特权使用说明。</li>
+      </ol>
+    </div>
+    ${aSection}
+    <hr class="divider">
+    <div class="attendance-guide">
+      <p class="attendance-guide__title">考勤特权使用说明：</p>
+      <p>1、使用有效期：${escapeHtml(data.date_range)}，逾期即失效，请合理安排使用；</p>
+      <p>2、使用方式：</p>
+      <p class="attendance-guide__sub">（1）弹性考勤：免申请，在使用有效期内，工作日最早上班时间为9:00，最迟上班为14:30，不计迟到早退，确保工时不低于7.5H即可；</p>
+      <p class="attendance-guide__sub">（2）远程办公：登录OA-右侧【工作办事】-【考勤】-【居家办公申请】，选择远程办公日期并提交（不满1天按1天计），Leader、考勤HR审批后生效，当日需正常进行上下班外勤打卡，工作时间与办公室办公一致。</p>
+    </div>
+    <hr class="divider">
+    <p style="font-size:14px;color:#4a5568;">感谢每一位在本季度辛勤付出的同事，愿大家以优秀为标杆，铆足干劲冲刺新程，解锁下一季度的 S/A 级 荣誉！</p>
+    <p style="font-size:14px;color:#718096;margin-top:8px;">如有疑问，请联系 ${escapeHtml(data.hr_name)}。</p>
+  </div>
+  <div class="email-footer">
+    <p>2026 · 人力资源部 Aurora HR Department</p>
+    <p>本邮件由系统自动发送，请勿直接回复</p>
+  </div>
+</div></div>
+</body></html>`;
+}
+
+function collectData(){
+  return {
+    title: `${document.getElementById("dept_cn").value} 2026年${document.getElementById("quarter").value}绩效表彰`,
+    dept: document.getElementById("dept").value,
+    quarter: document.getElementById("quarter").value,
+    s_bonus: document.getElementById("s_bonus").value,
+    a_bonus: document.getElementById("a_bonus").value,
+    s_remote: document.getElementById("s_remote").value,
+    a_remote: document.getElementById("a_remote").value,
+    date_range: document.getElementById("date_range").value,
+    hr_name: document.getElementById("hr_name").value,
+    s_list: sPersons,
+    a_list: aPersons
+  };
+}
+
+function generate(){
+  emailHTML = buildEmail(collectData());
+  document.getElementById("preview").srcdoc = emailHTML;
+  document.getElementById("status").textContent = "生成成功，所有处理均在浏览器本地完成。";
+}
+
+function downloadEmail(){
+  if(!emailHTML) generate();
+  const blob = new Blob([emailHTML], {type:"text/html;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "output_email.html";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+async function copyEmailHTML(){
+  if(!emailHTML) generate();
+  await navigator.clipboard.writeText(emailHTML);
+  document.getElementById("status").textContent = "HTML 已复制。";
+}
+
+window.onload = () => {
+  PRESET_S.forEach(d => addPerson("s", d));
+  PRESET_A.forEach(d => addPerson("a", d));
+  const first = sPersons[0];
+  if(first){
+    const body = document.getElementById("body-" + first.id);
+    if(body) body.classList.add("open");
+  }
+  generate();
+};
+</script>
+</body>
+</html>
