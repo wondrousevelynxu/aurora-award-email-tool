@@ -902,15 +902,22 @@ function emailCss(){
 
 function buildAttendanceGuide(data){
   const onlyA = !data.s_list.length && data.a_list.length;
-  const flexibleMethod = onlyA ? "" : '<p class="attendance-guide__sub">（1）弹性考勤：免申请，在使用有效期内，工作日最早上班时间为9:00，最迟上班为14:30，不计迟到早退，确保工时不低于7.5H即可；</p>';
-  const remotePrefix = onlyA ? "（1）" : "（2）";
+  if(onlyA){
+    return `
+    <div class="attendance-guide">
+      <p class="attendance-guide__title">考勤特权使用说明：</p>
+      <p>1、使用有效期：${escapeHtml(data.date_range)}，逾期即失效，请合理安排使用；</p>
+      <p>2、使用方式：登录OA-右侧【工作办事】-【考勤】-【居家办公申请】，选择远程办公日期并提交（不满1天按1天计），Leader、考勤HR审批后生效，当日需正常进行上下班外勤打卡，工作时间与办公室办公一致。</p>
+    </div>`;
+  }
+  const flexibleMethod = '<p class="attendance-guide__sub">（1）弹性考勤：免申请，在使用有效期内，工作日最早上班时间为9:00，最迟上班为14:30，不计迟到早退，确保工时不低于7.5H即可；</p>';
   return `
     <div class="attendance-guide">
       <p class="attendance-guide__title">考勤特权使用说明：</p>
       <p>1、使用有效期：${escapeHtml(data.date_range)}，逾期即失效，请合理安排使用；</p>
       <p>2、使用方式：</p>
       ${flexibleMethod}
-      <p class="attendance-guide__sub">${remotePrefix}远程办公：登录OA-右侧【工作办事】-【考勤】-【居家办公申请】，选择远程办公日期并提交（不满1天按1天计），Leader、考勤HR审批后生效，当日需正常进行上下班外勤打卡，工作时间与办公室办公一致。</p>
+      <p class="attendance-guide__sub">（2）远程办公：登录OA-右侧【工作办事】-【考勤】-【居家办公申请】，选择远程办公日期并提交（不满1天按1天计），Leader、考勤HR审批后生效，当日需正常进行上下班外勤打卡，工作时间与办公室办公一致。</p>
     </div>`;
 }
 
