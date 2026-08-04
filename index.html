@@ -101,6 +101,8 @@
         <div class="import-actions">
           <label class="btn-upload"><span id="ui_upload_excel">上传 .xlsx</span><input type="file" accept=".xlsx,.xls" style="display:none" onchange="importExcel(this)"></label>
           <label class="btn-upload"><span id="ui_upload_avatars">批量上传头像</span><input type="file" accept="image/*" multiple style="display:none" onchange="importAvatarImages(this)"></label>
+          <label class="btn-upload"><span id="ui_upload_content_template">导入固定内容表</span><input type="file" accept=".xlsx,.xls" style="display:none" onchange="importFixedContentTemplate(this)"></label>
+          <button class="btn-upload" id="ui_download_content_template" type="button" onclick="downloadFixedContentTemplate()">下载固定内容模板</button>
         </div>
         <div class="import-note" id="ui_import_note">支持读取：输出语言、部门、季度、奖金、远程天数、考勤有效期、HR、底部模板，以及 S/A 名单。英文版可选填“英文考勤有效期、奖项英文、评语英文”。一个 Excel 可包含多个部门，批量头像会按头像文件名、姓名或“部门+姓名”自动匹配。</div>
       </div>
@@ -238,6 +240,80 @@ const PRESET_COPY = {
 let sPersons = [], aPersons = [], emailHTML = "";
 let panelResize = null;
 let selectedDepartmentKey = "";
+let fixedContentOverrides = {zh:{}, en:{}};
+
+const FIXED_CONTENT_META = [
+  {key:"greeting", label:"开头问候语 / Greeting"},
+  {key:"section_s_title", label:"S级标题 / Performance S title"},
+  {key:"section_a_title", label:"A级标题 / Performance A title"},
+  {key:"no_review", label:"无评语占位 / No review placeholder"},
+  {key:"s_reward_lead", label:"S级权益引导语 / S reward lead"},
+  {key:"s_reward_bonus", label:"S级奖金权益 / S bonus benefit"},
+  {key:"s_reward_remote", label:"S级远程办公权益 / S remote benefit"},
+  {key:"s_reward_flexible", label:"S级弹性考勤权益 / S flexible attendance benefit"},
+  {key:"a_reward_lead", label:"A级权益引导语 / A reward lead"},
+  {key:"a_reward_bonus", label:"A级奖金权益 / A bonus benefit"},
+  {key:"a_reward_remote", label:"A级远程办公权益 / A remote benefit"},
+  {key:"attendance_title", label:"考勤说明标题 / Attendance title"},
+  {key:"attendance_validity", label:"考勤有效期说明 / Attendance validity"},
+  {key:"attendance_how_to_use", label:"考勤使用方式标题 / Attendance usage heading"},
+  {key:"attendance_flexible", label:"弹性考勤使用方式 / Flexible attendance usage"},
+  {key:"attendance_remote", label:"远程办公使用方式 / Remote work usage"},
+  {key:"attendance_remote_only", label:"仅A级远程办公使用方式 / A-only remote usage"},
+  {key:"closing_text", label:"结尾鼓励语 / Closing message"},
+  {key:"contact_text", label:"咨询说明 / Contact note"},
+  {key:"footer_line_1", label:"页脚第一行 / Footer line 1"},
+  {key:"footer_line_2", label:"页脚第二行 / Footer line 2"}
+];
+
+const FIXED_CONTENT_DEFAULTS = {
+  zh: {
+    greeting:"Dear，\n经绩效评审，以下同学评为 S/A，现予以部门公开表彰，以资鼓励！让我们对以下小伙伴表示热烈祝贺！",
+    section_s_title:"绩效 S 级",
+    section_a_title:"绩效 A 级",
+    no_review:"暂无评语",
+    s_reward_lead:"恭喜以上同学获得 绩效S 奖励：",
+    s_reward_bonus:"管理先锋/季度之星 奖金 RMB {{s_bonus}} ，随工资合并计税发放；",
+    s_reward_remote:"远程办公 {{s_remote}} 天，详见考勤特权使用说明；",
+    s_reward_flexible:"{{date_range}} 期间弹性考勤，详见考勤特权使用说明。",
+    a_reward_lead:"恭喜以上同学获得 绩效A 奖励：",
+    a_reward_bonus:"绩优绩效奖金 RMB {{a_bonus}} ，随工资合并计税发放；",
+    a_reward_remote:"远程办公 {{a_remote}} 天，详见考勤特权使用说明。",
+    attendance_title:"考勤特权使用说明：",
+    attendance_validity:"1、使用有效期：{{date_range}}，逾期即失效，请合理安排使用；",
+    attendance_how_to_use:"2、使用方式：",
+    attendance_flexible:"（1）弹性考勤：免申请，在使用有效期内，工作日最早上班时间为9:00，最迟上班为14:30，不计迟到早退，确保工时不低于7.5H即可；",
+    attendance_remote:"（2）远程办公：登录OA-右侧【工作办事】-【考勤】-【居家办公申请】，选择远程办公日期并提交（不满1天按1天计），Leader、考勤HR审批后生效，当日需正常进行上下班外勤打卡，工作时间与办公室办公一致。",
+    attendance_remote_only:"2、使用方式：登录OA-右侧【工作办事】-【考勤】-【居家办公申请】，选择远程办公日期并提交（不满1天按1天计），Leader、考勤HR审批后生效，当日需正常进行上下班外勤打卡，工作时间与办公室办公一致。",
+    closing_text:"感谢每一位在本季度辛勤付出的同事，愿大家以优秀为标杆，铆足干劲冲刺新程，解锁下一季度的 S/A 级 荣誉！",
+    contact_text:"如有疑问，请联系 {{hr_name}}。",
+    footer_line_1:"2026 · 人力资源部 Aurora HR Department",
+    footer_line_2:"本邮件由系统自动发送，请勿直接回复"
+  },
+  en: {
+    greeting:"Dear all,\nFollowing the performance review, the following colleague(s) have been recognized as Performance S/A. We would like to recognize their outstanding contributions and extend our warm congratulations!",
+    section_s_title:"Performance S",
+    section_a_title:"Performance A",
+    no_review:"No review provided.",
+    s_reward_lead:"Congratulations to the above colleague(s) on receiving the Performance S rewards:",
+    s_reward_bonus:"Management Pioneer / Quarter Star bonus: RMB {{s_bonus}}, paid together with salary and taxed accordingly;",
+    s_reward_remote:"Remote work: {{s_remote}} day(s), please refer to the attendance privilege instructions;",
+    s_reward_flexible:"Flexible attendance during {{date_range_en}}, please refer to the attendance privilege instructions.",
+    a_reward_lead:"Congratulations to the above colleague(s) on receiving the Performance A rewards:",
+    a_reward_bonus:"Performance bonus: RMB {{a_bonus}}, paid together with salary and taxed accordingly;",
+    a_reward_remote:"Remote work: {{a_remote}} day(s), please refer to the attendance privilege instructions.",
+    attendance_title:"Attendance Privilege Instructions:",
+    attendance_validity:"1. Validity period: {{date_range_en}}. The privilege will expire after this period, so please plan accordingly.",
+    attendance_how_to_use:"2. How to use:",
+    attendance_flexible:"(1) Flexible attendance: No application is required. During the validity period, on working days, the earliest start time is 9:00 and the latest start time is 14:30. Late arrival and early leave will not be counted, provided that daily working hours are no less than 7.5 hours.",
+    attendance_remote:"(2) Remote work: Log in to OA - right-side [Work Services] - [Attendance] - [Work from Home Application], select the remote work date and submit the request (less than 1 day will be counted as 1 full day). It will take effect after approval by the Leader and Attendance HR. On the same day, please complete regular offsite clock-in/out; working hours are consistent with office work.",
+    attendance_remote_only:"2. How to use: Log in to OA - right-side [Work Services] - [Attendance] - [Work from Home Application], select the remote work date and submit the request (less than 1 day will be counted as 1 full day). It will take effect after approval by the Leader and Attendance HR. On the same day, please complete regular offsite clock-in/out; working hours are consistent with office work.",
+    closing_text:"Thank you to everyone for your hard work this quarter. Let us keep raising the bar and striving for another strong quarter ahead.",
+    contact_text:"For any questions, please contact {{hr_name}}.",
+    footer_line_1:"2026 · Aurora HR Department",
+    footer_line_2:"This email was generated automatically. Please do not reply directly."
+  }
+};
 
 const UI_TEXT = {
   zh: {
@@ -246,7 +322,9 @@ const UI_TEXT = {
     sectionImport:"导入 Excel",
     uploadExcel:"上传 .xlsx",
     uploadAvatars:"批量上传头像",
-    importNote:"支持读取：输出语言、部门、季度、奖金、远程天数、考勤有效期、HR、底部模板，以及 S/A 名单。英文版可选填“英文考勤有效期、奖项英文、评语英文”。一个 Excel 可包含多个部门，批量头像会按头像文件名、姓名或“部门+姓名”自动匹配。",
+    uploadContentTemplate:"导入固定内容表",
+    downloadContentTemplate:"下载固定内容模板",
+    importNote:"支持读取：输出语言、部门、季度、奖金、远程天数、考勤有效期、HR、底部模板，以及 S/A 名单。固定内容表可同时维护中文和英文的问候语、权益说明、考勤说明、页脚等内容。一个 Excel 可包含多个部门，批量头像会按头像文件名、姓名或“部门+姓名”自动匹配。",
     sectionBatch:"按部门批量生成",
     batchEmpty:"导入含“部门”列的 Excel 后，将自动按部门拆分生成文件。",
     batchSummary:"已识别 {{count}} 个部门，共 S {{s}} 位、A {{a}} 位。下载文件包会为每个部门生成 1 个 HTML。",
@@ -311,7 +389,11 @@ const UI_TEXT = {
     bundleDownloaded:"已生成 {{count}} 个部门文件并打包下载。",
     zipFailed:"JSZip 加载失败，已尝试分别下载 {{count}} 个 HTML 文件。",
     copied:"HTML 文件内容已复制，可粘贴到邮件源码模式。",
-    copyFailed:"复制失败，请点击下载 HTML 文件后使用。"
+    copyFailed:"复制失败，请点击下载 HTML 文件后使用。",
+    contentImported:"已导入固定内容表：更新 {{count}} 个文案字段。",
+    contentTemplateDownloaded:"固定内容模板已下载。",
+    contentTemplateUnavailable:"Excel 生成库加载失败，请检查网络后重试。",
+    contentImportFailed:"固定内容表导入失败，请检查是否包含“内容字段 / 中文内容 / 英文内容”列。"
   },
   en: {
     appTitle:"Aurora Recognition Email Generator",
@@ -319,7 +401,9 @@ const UI_TEXT = {
     sectionImport:"Import Excel",
     uploadExcel:"Upload .xlsx",
     uploadAvatars:"Batch Upload Avatars",
-    importNote:"Supported fields: output language, department, quarter, bonuses, remote work days, validity period, HR, footer templates, and S/A awardees. For English output, optional fields include English validity period, award name in English, and review in English. One Excel file can include multiple departments; avatar files are matched by file name, name, or department + name.",
+    uploadContentTemplate:"Import Fixed Content",
+    downloadContentTemplate:"Download Content Template",
+    importNote:"Supported fields: output language, department, quarter, bonuses, remote work days, validity period, HR, footer templates, and S/A awardees. The fixed content table can maintain Chinese and English greeting text, benefit descriptions, attendance instructions, footers, and other reusable copy. One Excel file can include multiple departments; avatar files are matched by file name, name, or department + name.",
     sectionBatch:"Batch Generate by Department",
     batchEmpty:"After importing an Excel file with a Department column, the tool will split and generate files by department automatically.",
     batchSummary:"Detected {{count}} department(s), with {{s}} S awardee(s) and {{a}} A awardee(s). The bundle will include 1 HTML file per department.",
@@ -384,7 +468,11 @@ const UI_TEXT = {
     bundleDownloaded:"Generated and downloaded files for {{count}} department(s).",
     zipFailed:"JSZip failed to load. Attempted to download {{count}} HTML file(s) separately.",
     copied:"HTML content copied. You can paste it into email source mode.",
-    copyFailed:"Copy failed. Please download the HTML file instead."
+    copyFailed:"Copy failed. Please download the HTML file instead.",
+    contentImported:"Imported fixed content table: {{count}} copy field(s) updated.",
+    contentTemplateDownloaded:"Fixed content template downloaded.",
+    contentTemplateUnavailable:"Excel generator failed to load. Please check the network and try again.",
+    contentImportFailed:"Failed to import the fixed content table. Please check that it includes Field / Chinese Content / English Content columns."
   }
 };
 
@@ -413,6 +501,7 @@ function applyLanguageUI(){
   [
     ["ui_app_title","appTitle"],["ui_app_subtitle","appSubtitle"],["ui_section_import","sectionImport"],
     ["ui_upload_excel","uploadExcel"],["ui_upload_avatars","uploadAvatars"],["ui_import_note","importNote"],
+    ["ui_upload_content_template","uploadContentTemplate"],["ui_download_content_template","downloadContentTemplate"],
     ["ui_section_batch","sectionBatch"],["ui_preview_dept_label","previewDeptLabel"],
     ["ui_preview_dept_button","previewDeptButton"],["ui_download_bundle","downloadBundle"],
     ["ui_section_config","sectionConfig"],["ui_output_language_label","outputLanguage"],
@@ -524,7 +613,12 @@ function renderTemplate(template, data){
     dept_cn:data.dept_cn,
     dept:data.dept,
     date_range:data.date_range,
-    date_range_en:data.date_range_en || data.date_range
+    date_range_en:data.date_range_en || data.date_range,
+    date_range_display:getDisplayDateRange(data),
+    s_bonus:data.s_bonus,
+    a_bonus:data.a_bonus,
+    s_remote:data.s_remote,
+    a_remote:data.a_remote
   };
   const rendered = String(template || "").replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key) => vars[key] ?? "");
   return escapeHtml(rendered).replace(/\n/g, "<br>");
@@ -574,6 +668,46 @@ function getFooterLine1(data){
 
 function getFooterLine2(data){
   return isEnglish(data) ? data.footer_line_2_en : data.footer_line_2;
+}
+
+function contentLang(data){
+  return isEnglish(data) ? "en" : "zh";
+}
+
+function getFixedContent(key, data){
+  const lang = contentLang(data);
+  const override = fixedContentOverrides[lang]?.[key];
+  if(override !== undefined && override !== null && String(override).trim() !== "") return override;
+  const fieldMap = {
+    closing_text: lang === "en" ? "closing_text_en" : "closing_text",
+    contact_text: lang === "en" ? "contact_text_en" : "contact_text",
+    footer_line_1: lang === "en" ? "footer_line_1_en" : "footer_line_1",
+    footer_line_2: lang === "en" ? "footer_line_2_en" : "footer_line_2"
+  };
+  const fieldName = fieldMap[key];
+  if(fieldName && data[fieldName]) return data[fieldName];
+  return FIXED_CONTENT_DEFAULTS[lang]?.[key] || FIXED_CONTENT_DEFAULTS.zh[key] || "";
+}
+
+function renderFixedContent(key, data){
+  return renderTemplate(getFixedContent(key, data), data);
+}
+
+function syncFixedContentInputs(){
+  const pairs = [
+    ["closing_text","zh","closing_text"],
+    ["contact_text","zh","contact_text"],
+    ["footer_line_1","zh","footer_line_1"],
+    ["footer_line_2","zh","footer_line_2"],
+    ["closing_text_en","en","closing_text"],
+    ["contact_text_en","en","contact_text"],
+    ["footer_line_1_en","en","footer_line_1"],
+    ["footer_line_2_en","en","footer_line_2"]
+  ];
+  pairs.forEach(([id, lang, key]) => {
+    const value = fixedContentOverrides[lang]?.[key];
+    if(value !== undefined && value !== null && value !== "") setInputValue(id, value);
+  });
 }
 
 function getDepartmentGroups(){
@@ -1166,6 +1300,86 @@ function importSectionedAwardRows(rows){
   });
 }
 
+function findFixedContentSheet(workbook){
+  return workbook.SheetNames.find(name => /固定内容|文案|content|copy|template/i.test(name)) || workbook.SheetNames[0];
+}
+
+function parseFixedContentRows(rows){
+  let updated = 0;
+  rows.forEach(row => {
+    const key = String(pickValue(row, ["内容字段","字段","key","field","content_key"]) || "").trim();
+    if(!key) return;
+    const zh = pickValue(row, ["中文内容","中文","zh","chinese","cn"]);
+    const en = pickValue(row, ["英文内容","英文","en","english"]);
+    if(zh !== undefined && zh !== null && String(zh).trim() !== ""){
+      fixedContentOverrides.zh[key] = String(zh).trim();
+      updated += 1;
+    }
+    if(en !== undefined && en !== null && String(en).trim() !== ""){
+      fixedContentOverrides.en[key] = String(en).trim();
+      updated += 1;
+    }
+  });
+  syncFixedContentInputs();
+  return updated;
+}
+
+async function importFixedContentTemplate(input){
+  const file = input.files[0];
+  if(!file) return;
+  if(!window.XLSX){
+    document.getElementById("status").textContent = uiText("excelLoadFailed");
+    return;
+  }
+  try{
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer, {type:"array"});
+    const sheetName = findFixedContentSheet(workbook);
+    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {defval:""});
+    const updated = parseFixedContentRows(rows);
+    if(!updated){
+      document.getElementById("status").textContent = uiText("contentImportFailed");
+      return;
+    }
+    applyLanguageUI();
+    generate();
+    document.getElementById("status").textContent = formatUiText("contentImported", {count:updated});
+  }catch(err){
+    document.getElementById("status").textContent = uiText("contentImportFailed");
+  }finally{
+    input.value = "";
+  }
+}
+
+function downloadFixedContentTemplate(){
+  if(!window.XLSX){
+    document.getElementById("status").textContent = uiText("contentTemplateUnavailable");
+    return;
+  }
+  const rows = FIXED_CONTENT_META.map(item => ({
+    "内容字段": item.key,
+    "说明": item.label,
+    "中文内容": FIXED_CONTENT_DEFAULTS.zh[item.key] || "",
+    "英文内容": FIXED_CONTENT_DEFAULTS.en[item.key] || ""
+  }));
+  const workbook = XLSX.utils.book_new();
+  const contentSheet = XLSX.utils.json_to_sheet(rows);
+  const noteSheet = XLSX.utils.aoa_to_sheet([
+    ["使用说明"],
+    ["日常不需要导入固定内容表；当问候语、权益说明、考勤说明、页脚等固定文案变化时，下载本模板，修改“中文内容”和“英文内容”后重新导入。"],
+    ["请不要修改“内容字段”列，否则工具无法识别对应文案。"],
+    ["支持占位符：{{hr_name}}、{{quarter}}、{{dept_cn}}、{{dept}}、{{date_range}}、{{date_range_en}}、{{date_range_display}}、{{s_bonus}}、{{a_bonus}}、{{s_remote}}、{{a_remote}}。"],
+    ["English"],
+    ["Usually you do not need to import this table. When fixed copy changes, update the Chinese Content and English Content columns, then import the file."],
+    ["Do not change the Field column; it is used by the tool to identify each copy block."],
+    ["Supported placeholders: {{hr_name}}, {{quarter}}, {{dept_cn}}, {{dept}}, {{date_range}}, {{date_range_en}}, {{date_range_display}}, {{s_bonus}}, {{a_bonus}}, {{s_remote}}, {{a_remote}}."]
+  ]);
+  XLSX.utils.book_append_sheet(workbook, contentSheet, "固定内容");
+  XLSX.utils.book_append_sheet(workbook, noteSheet, "说明");
+  XLSX.writeFile(workbook, "固定内容模板_中英文.xlsx");
+  document.getElementById("status").textContent = uiText("contentTemplateDownloaded");
+}
+
 async function importExcel(input){
   const file = input.files[0];
   if(!file) return;
@@ -1182,6 +1396,11 @@ async function importExcel(input){
     parseConfigRows(XLSX.utils.sheet_to_json(workbook.Sheets["配置"], {header:1, blankrows:false}));
   }else{
     parseConfigRows(firstRows.slice(0, 20));
+  }
+
+  const fixedContentSheet = workbook.SheetNames.find(name => /固定内容|文案|content|copy|template/i.test(name));
+  if(fixedContentSheet){
+    parseFixedContentRows(XLSX.utils.sheet_to_json(workbook.Sheets[fixedContentSheet], {defval:""}));
   }
 
   if(hasSectionedAwardRows(firstRows)){
@@ -1247,54 +1466,33 @@ function emailCss(){
 }
 
 function buildAttendanceGuide(data){
-  const dateRange = getDisplayDateRange(data);
   const onlyA = !data.s_list.length && data.a_list.length;
-  if(isEnglish(data)){
-    if(onlyA){
-      return `
-    <div class="attendance-guide">
-      <p class="attendance-guide__title">Attendance Privilege Instructions:</p>
-      <p>1. Validity period: ${escapeHtml(dateRange)}. The privilege will expire after this period, so please plan accordingly.</p>
-      <p>2. How to use: Log in to OA - right-side 【Work Services】 - 【Attendance】 - 【Work from Home Application】, select the remote work date and submit the request (less than 1 day will be counted as 1 full day). It will take effect after approval by the Leader and Attendance HR. On the same day, please complete regular offsite clock-in/out; working hours are consistent with office work.</p>
-    </div>`;
-    }
-    return `
-    <div class="attendance-guide">
-      <p class="attendance-guide__title">Attendance Privilege Instructions:</p>
-      <p>1. Validity period: ${escapeHtml(dateRange)}. The privilege will expire after this period, so please plan accordingly.</p>
-      <p>2. How to use:</p>
-      <p class="attendance-guide__sub">(1) Flexible attendance: No application is required. During the validity period, on working days, the earliest start time is 9:00 and the latest start time is 14:30. Late arrival and early leave will not be counted, provided that daily working hours are no less than 7.5 hours.</p>
-      <p class="attendance-guide__sub">(2) Remote work: Log in to OA - right-side 【Work Services】 - 【Attendance】 - 【Work from Home Application】, select the remote work date and submit the request (less than 1 day will be counted as 1 full day). It will take effect after approval by the Leader and Attendance HR. On the same day, please complete regular offsite clock-in/out; working hours are consistent with office work.</p>
-    </div>`;
-  }
   if(onlyA){
     return `
     <div class="attendance-guide">
-      <p class="attendance-guide__title">考勤特权使用说明：</p>
-      <p>1、使用有效期：${escapeHtml(dateRange)}，逾期即失效，请合理安排使用；</p>
-      <p>2、使用方式：登录OA-右侧【工作办事】-【考勤】-【居家办公申请】，选择远程办公日期并提交（不满1天按1天计），Leader、考勤HR审批后生效，当日需正常进行上下班外勤打卡，工作时间与办公室办公一致。</p>
+      <p class="attendance-guide__title">${renderFixedContent("attendance_title", data)}</p>
+      <p>${renderFixedContent("attendance_validity", data)}</p>
+      <p>${renderFixedContent("attendance_remote_only", data)}</p>
     </div>`;
   }
-  const flexibleMethod = '<p class="attendance-guide__sub">（1）弹性考勤：免申请，在使用有效期内，工作日最早上班时间为9:00，最迟上班为14:30，不计迟到早退，确保工时不低于7.5H即可；</p>';
   return `
     <div class="attendance-guide">
-      <p class="attendance-guide__title">考勤特权使用说明：</p>
-      <p>1、使用有效期：${escapeHtml(dateRange)}，逾期即失效，请合理安排使用；</p>
-      <p>2、使用方式：</p>
-      ${flexibleMethod}
-      <p class="attendance-guide__sub">（2）远程办公：登录OA-右侧【工作办事】-【考勤】-【居家办公申请】，选择远程办公日期并提交（不满1天按1天计），Leader、考勤HR审批后生效，当日需正常进行上下班外勤打卡，工作时间与办公室办公一致。</p>
+      <p class="attendance-guide__title">${renderFixedContent("attendance_title", data)}</p>
+      <p>${renderFixedContent("attendance_validity", data)}</p>
+      <p>${renderFixedContent("attendance_how_to_use", data)}</p>
+      <p class="attendance-guide__sub">${renderFixedContent("attendance_flexible", data)}</p>
+      <p class="attendance-guide__sub">${renderFixedContent("attendance_remote", data)}</p>
     </div>`;
 }
 
 function buildEmail(data){
   const english = isEnglish(data);
   const emailTitle = getEmailTitle(data);
-  const dateRange = getDisplayDateRange(data);
   const sCards = data.s_list.map(p => {
     const reviewText = getReviewText(p, data);
     const review = reviewText
       ? `<p class="award-eval-text">${escapeHtml(reviewText)}</p>`
-      : `<p class="award-eval-text" style="color:#aaa;font-style:italic;">${english ? "No review provided." : "暂无评语"}</p>`;
+      : `<p class="award-eval-text" style="color:#aaa;font-style:italic;">${renderFixedContent("no_review", data)}</p>`;
     return `
       <div class="awardee-block">
         <div class="award-card award-card--split">
@@ -1309,27 +1507,27 @@ function buildEmail(data){
   }).join("");
 
   const sSection = data.s_list.length ? `
-    <div class="section-title-s"><span class="highlight-s">${english ? "Performance S" : "绩效 S 级"}</span></div>
+    <div class="section-title-s"><span class="highlight-s">${renderFixedContent("section_s_title", data)}</span></div>
     <div class="awardee-list">${sCards}</div>
     <div class="reward-notice">
-      <p class="reward-notice__lead">${english ? 'Congratulations to the above colleague(s) on receiving the <span class="highlight-s">Performance S</span> rewards:' : '恭喜以上同学获得 <span class="highlight-s">绩效S</span> 奖励：'}</p>
+      <p class="reward-notice__lead">${renderFixedContent("s_reward_lead", data)}</p>
       <ol class="reward-notice__list">
-        <li>${english ? `Management Pioneer / Quarter Star bonus: RMB ${escapeHtml(data.s_bonus)}, paid together with salary and taxed accordingly;` : `管理先锋/季度之星 奖金 RMB ${escapeHtml(data.s_bonus)} ，随工资合并计税发放；`}</li>
-        <li>${english ? `Remote work: ${escapeHtml(data.s_remote)} day(s), please refer to the attendance privilege instructions;` : `远程办公 &nbsp;${escapeHtml(data.s_remote)}&nbsp; 天，详见考勤特权使用说明；`}</li>
-        <li>${english ? `Flexible attendance during ${escapeHtml(dateRange)}, please refer to the attendance privilege instructions.` : `&nbsp;${escapeHtml(dateRange)} 期间弹性考勤，详见考勤特权使用说明。`}</li>
+        <li>${renderFixedContent("s_reward_bonus", data)}</li>
+        <li>${renderFixedContent("s_reward_remote", data)}</li>
+        <li>${renderFixedContent("s_reward_flexible", data)}</li>
       </ol>
     </div>` : "";
 
   const aSection = data.a_list.length ? `
     ${data.s_list.length ? '<hr class="divider">' : ''}
     <div class="a-level-module">
-      <div class="section-title-a"><span class="highlight-a">${english ? "Performance A" : "绩效 A 级"}</span></div>
+      <div class="section-title-a"><span class="highlight-a">${renderFixedContent("section_a_title", data)}</span></div>
       <ul class="a-level-name-list">${data.a_list.map(p => `<li><span style="width:8px;height:8px;border-radius:50%;background:linear-gradient(135deg,#18AD91,#2477a8);display:inline-block;flex-shrink:0;"></span><span>${escapeHtml(p.name)}</span></li>`).join("")}</ul>
       <div class="reward-notice">
-        <p class="reward-notice__lead">${english ? 'Congratulations to the above colleague(s) on receiving the <span class="highlight-a">Performance A</span> rewards:' : '恭喜以上同学获得 <span class="highlight-a">绩效A</span> 奖励：'}</p>
+        <p class="reward-notice__lead">${renderFixedContent("a_reward_lead", data)}</p>
         <ol class="reward-notice__list">
-          <li>${english ? `Performance bonus: RMB ${escapeHtml(data.a_bonus)}, paid together with salary and taxed accordingly;` : `绩优绩效奖金 RMB ${escapeHtml(data.a_bonus)} ，随工资合并计税发放；`}</li>
-          <li>${english ? `Remote work: ${escapeHtml(data.a_remote)} day(s), please refer to the attendance privilege instructions.` : `远程办公 &nbsp;${escapeHtml(data.a_remote)}&nbsp; 天，详见考勤特权使用说明。`}</li>
+          <li>${renderFixedContent("a_reward_bonus", data)}</li>
+          <li>${renderFixedContent("a_reward_remote", data)}</li>
         </ol>
       </div>
     </div>` : "";
@@ -1348,18 +1546,18 @@ function buildEmail(data){
     <div class="subtitle">${escapeHtml(data.quarter)} 2026 Performance Recognition${english ? ` (${escapeHtml(data.dept)})` : `（${escapeHtml(data.dept)}）`}</div>
   </div>
   <div class="email-body">
-    <p class="greeting">${english ? "Dear all,<br>Following the performance review, the following colleague(s) have been recognized as Performance S/A. We would like to recognize their outstanding contributions and extend our warm congratulations!" : "Dear，<br>经绩效评审，以下同学评为 S/A，现予以部门公开表彰，以资鼓励！让我们对以下小伙伴表示热烈祝贺！"}</p>
+    <p class="greeting">${renderFixedContent("greeting", data)}</p>
     ${sSection}
     ${aSection}
     <hr class="divider">
     ${buildAttendanceGuide(data)}
     <hr class="divider">
-    ${String(getClosingTemplate(data) || "").trim() ? `<p class="closing-text">${renderTemplate(getClosingTemplate(data), data)}</p>` : ""}
-    ${String(getContactTemplate(data) || "").trim() ? `<p class="contact-text">${renderTemplate(getContactTemplate(data), data)}</p>` : ""}
+    ${String(getFixedContent("closing_text", data) || "").trim() ? `<p class="closing-text">${renderFixedContent("closing_text", data)}</p>` : ""}
+    ${String(getFixedContent("contact_text", data) || "").trim() ? `<p class="contact-text">${renderFixedContent("contact_text", data)}</p>` : ""}
   </div>
   <div class="email-footer">
-    ${String(getFooterLine1(data) || "").trim() ? `<p>${renderTemplate(getFooterLine1(data), data)}</p>` : ""}
-    ${String(getFooterLine2(data) || "").trim() ? `<p>${renderTemplate(getFooterLine2(data), data)}</p>` : ""}
+    ${String(getFixedContent("footer_line_1", data) || "").trim() ? `<p>${renderFixedContent("footer_line_1", data)}</p>` : ""}
+    ${String(getFixedContent("footer_line_2", data) || "").trim() ? `<p>${renderFixedContent("footer_line_2", data)}</p>` : ""}
   </div>
 </div></div>
 </body></html>`;
