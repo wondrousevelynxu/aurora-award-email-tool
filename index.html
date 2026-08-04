@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>极光表彰邮件生成器</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <style>
   :root{
     --teal:#18AD91;--blue:#2477a8;--navy:#2c34b6;
@@ -26,8 +27,8 @@
   .section-label span{width:3px;height:14px;background:var(--teal);border-radius:2px;display:inline-block;}
   .field{margin-bottom:12px;}
   .field label{font-size:12px;color:var(--muted);font-weight:600;display:block;margin-bottom:4px;}
-  .field input,.field select{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit;color:var(--text);background:#fff;outline:none;transition:border .2s;}
-  .field input:focus,.field select:focus{border-color:var(--teal);}
+  .field input,.field select,.field textarea{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit;color:var(--text);background:#fff;outline:none;transition:border .2s;}
+  .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--teal);}
   .field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
   .person-list{display:flex;flex-direction:column;gap:8px;}
   .person-card{border:1px solid var(--border);border-radius:8px;overflow:hidden;}
@@ -45,10 +46,15 @@
   .avatar-editor canvas{display:block;width:100%;height:100%;}
   .avatar-tools{flex:1;min-width:0;}
   .avatar-hint{font-size:11px;color:#94a3b8;margin-top:6px;line-height:1.5;}
+  .avatar-action-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
   .avatar-zoom{width:100%;margin-top:10px;accent-color:var(--teal);}
   .import-box{border:1px dashed var(--border);border-radius:10px;background:#f8fafc;padding:12px;}
   .import-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
   .import-note{font-size:11px;color:#94a3b8;line-height:1.6;margin-top:8px;}
+  .batch-box{border:1px solid var(--border);border-radius:8px;background:#f8fafc;padding:12px;}
+  .batch-summary{font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:10px;}
+  .batch-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .batch-actions .btn-secondary,.batch-actions .btn-download{width:100%;}
   .btn-upload{padding:6px 12px;background:#f1f5f9;border:1px solid var(--border);border-radius:6px;font-size:12px;cursor:pointer;color:var(--muted);}
   .btn-upload:hover{background:#e2e8f0;}
   .textarea-review{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;color:var(--text);resize:vertical;min-height:60px;outline:none;}
@@ -92,7 +98,22 @@
           <label class="btn-upload">上传 .xlsx<input type="file" accept=".xlsx,.xls" style="display:none" onchange="importExcel(this)"></label>
           <label class="btn-upload">批量上传头像<input type="file" accept="image/*" multiple style="display:none" onchange="importAvatarImages(this)"></label>
         </div>
-        <div class="import-note">支持读取：部门、季度、奖金、远程天数、考勤有效期、HR，以及 S/A 名单。批量头像会按图片文件名自动匹配 Excel 的头像文件名或姓名。</div>
+        <div class="import-note">支持读取：部门、季度、奖金、远程天数、考勤有效期、HR，以及 S/A 名单。一个 Excel 可包含多个部门，批量头像会按头像文件名、姓名或“部门+姓名”自动匹配。</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-label"><span></span>按部门批量生成</div>
+      <div class="batch-box">
+        <div class="batch-summary" id="batch-summary">导入含“部门”列的 Excel 后，将自动按部门拆分生成文件。</div>
+        <div class="field">
+          <label>预览部门</label>
+          <select id="batch_dept_select" onchange="previewDepartment(this.value)"></select>
+        </div>
+        <div class="batch-actions">
+          <button class="btn-secondary" onclick="previewDepartment(document.getElementById('batch_dept_select').value)">预览此部门</button>
+          <button class="btn-download" onclick="downloadDepartmentBundle()">下载部门文件包</button>
+        </div>
       </div>
     </div>
 
@@ -111,6 +132,23 @@
       </div>
       <div class="field"><label>考勤有效期</label><input id="date_range" value="5月1日-7月30日"></div>
       <div class="field"><label>HR 联系人</label><input id="hr_name" value="HR-XXX"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-label"><span></span>底部模板</div>
+      <div class="field">
+        <label>结尾鼓励语</label>
+        <textarea id="closing_text" rows="3">感谢每一位在本季度辛勤付出的同事，愿大家以优秀为标杆，铆足干劲冲刺新程，解锁下一季度的 S/A 级 荣誉！</textarea>
+      </div>
+      <div class="field">
+        <label>咨询说明模板</label>
+        <textarea id="contact_text" rows="2">如有疑问，请联系 {{hr_name}}。</textarea>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>页脚第一行</label><input id="footer_line_1" value="2026 · 人力资源部 Aurora HR Department"></div>
+        <div class="field"><label>页脚第二行</label><input id="footer_line_2" value="本邮件由系统自动发送，请勿直接回复"></div>
+      </div>
+      <div class="import-note">支持占位符：{{hr_name}}、{{quarter}}、{{dept_cn}}、{{dept}}、{{date_range}}。</div>
     </div>
 
     <div class="section">
@@ -159,6 +197,7 @@ const PRESET_A = [
 
 let sPersons = [], aPersons = [], emailHTML = "";
 let panelResize = null;
+let selectedDepartmentKey = "";
 
 function uid(){ return Math.random().toString(36).slice(2,8); }
 function escapeHtml(value){
@@ -194,8 +233,89 @@ function avatarMatchKey(value){
     .toLowerCase();
 }
 
+function getPersonDept(person){
+  return String(person.dept || document.getElementById("dept_cn")?.value || "未填写部门").trim() || "未填写部门";
+}
+
+function safeFileName(value){
+  return String(value || "未命名部门").trim().replace(/[\\/:*?"<>|]/g, "_").replace(/\s+/g, "_");
+}
+
 function clamp(value, min, max){
   return Math.min(Math.max(value, min), max);
+}
+
+function renderTemplate(template, data){
+  const vars = {
+    hr_name:data.hr_name,
+    quarter:data.quarter,
+    dept_cn:data.dept_cn,
+    dept:data.dept,
+    date_range:data.date_range
+  };
+  const rendered = String(template || "").replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key) => vars[key] ?? "");
+  return escapeHtml(rendered).replace(/\n/g, "<br>");
+}
+
+function getDepartmentGroups(){
+  const groups = new Map();
+  const addToGroup = (person, level) => {
+    const deptName = getPersonDept(person);
+    const key = avatarMatchKey(deptName) || deptName;
+    if(!groups.has(key)){
+      groups.set(key, {
+        key,
+        deptName,
+        deptDisplay:person.deptDisplay || "",
+        s_list:[],
+        a_list:[]
+      });
+    }else if(person.deptDisplay && !groups.get(key).deptDisplay){
+      groups.get(key).deptDisplay = person.deptDisplay;
+    }
+    groups.get(key)[level === "s" ? "s_list" : "a_list"].push(person);
+  };
+  sPersons.forEach(person => addToGroup(person, "s"));
+  aPersons.forEach(person => addToGroup(person, "a"));
+  return Array.from(groups.values()).sort((a, b) => a.deptName.localeCompare(b.deptName, "zh-CN"));
+}
+
+function buildDepartmentData(group){
+  const base = collectData();
+  return {
+    ...base,
+    title:`${group.deptName} 2026年${base.quarter}绩效表彰`,
+    dept_cn:group.deptName,
+    dept:group.deptDisplay || (group.deptName === base.dept_cn ? base.dept : group.deptName),
+    s_list:group.s_list,
+    a_list:group.a_list
+  };
+}
+
+function updateDepartmentBatchUI(){
+  const summary = document.getElementById("batch-summary");
+  const select = document.getElementById("batch_dept_select");
+  if(!summary || !select) return;
+  const groups = getDepartmentGroups();
+  const totalS = groups.reduce((sum, group) => sum + group.s_list.length, 0);
+  const totalA = groups.reduce((sum, group) => sum + group.a_list.length, 0);
+  summary.textContent = groups.length
+    ? `已识别 ${groups.length} 个部门，共 S ${totalS} 位、A ${totalA} 位。下载文件包会为每个部门生成 1 个 HTML。`
+    : "导入含“部门”列的 Excel 后，将自动按部门拆分生成文件。";
+  const previousValue = select.value || selectedDepartmentKey;
+  select.innerHTML = groups.map(group => `<option value="${escapeHtml(group.key)}">${escapeHtml(group.deptName)}（S ${group.s_list.length} / A ${group.a_list.length}）</option>`).join("");
+  if(groups.some(group => group.key === previousValue)){
+    select.value = previousValue;
+  }else if(groups[0]){
+    select.value = groups[0].key;
+  }
+  selectedDepartmentKey = select.value || "";
+}
+
+function getSelectedDepartmentGroup(){
+  const groups = getDepartmentGroups();
+  const selected = document.getElementById("batch_dept_select")?.value || selectedDepartmentKey;
+  return groups.find(group => group.key === selected) || groups[0] || null;
 }
 
 function setLeftPanelWidth(width){
@@ -298,11 +418,66 @@ async function drawAvatarToCanvas(person, canvas){
   const img = await loadAvatarImage(person.avatarOriginal);
   const baseScale = Math.max(size / img.width, size / img.height);
   const zoom = Number(person.avatarScale || 1);
+  constrainAvatarTransform(person, img, size);
   const drawW = img.width * baseScale * zoom;
   const drawH = img.height * baseScale * zoom;
   const dx = (size - drawW) / 2 + Number(person.avatarX || 0) * (size / 200);
   const dy = (size - drawH) / 2 + Number(person.avatarY || 0) * (size / 200);
   ctx.drawImage(img, dx, dy, drawW, drawH);
+}
+
+function constrainAvatarTransform(person, img, size=200){
+  const baseScale = Math.max(size / img.width, size / img.height);
+  const zoom = Number(person.avatarScale || 1);
+  const drawW = img.width * baseScale * zoom;
+  const drawH = img.height * baseScale * zoom;
+  const limitX = Math.max(0, (drawW - size) / 2) * (200 / size);
+  const limitY = Math.max(0, (drawH - size) / 2) * (200 / size);
+  person.avatarX = clamp(Number(person.avatarX || 0), -limitX, limitX);
+  person.avatarY = clamp(Number(person.avatarY || 0), -limitY, limitY);
+}
+
+async function detectAvatarFocus(src, img){
+  if("FaceDetector" in window && "createImageBitmap" in window){
+    try{
+      const blob = await (await fetch(src)).blob();
+      const bitmap = await createImageBitmap(blob);
+      const detector = new FaceDetector({maxDetectedFaces:1, fastMode:true});
+      const faces = await detector.detect(bitmap);
+      bitmap.close();
+      if(faces.length){
+        const face = faces.sort((a, b) => (b.boundingBox.width * b.boundingBox.height) - (a.boundingBox.width * a.boundingBox.height))[0];
+        const box = face.boundingBox;
+        return {
+          x: box.x + box.width / 2,
+          y: box.y + box.height / 2,
+          box,
+          type: "face"
+        };
+      }
+    }catch(err){}
+  }
+  return {x: img.width / 2, y: img.height * 0.42, box:null, type:"composition"};
+}
+
+async function autoCenterAvatar(person){
+  if(!person.avatarOriginal) return;
+  const img = await loadAvatarImage(person.avatarOriginal);
+  const focus = await detectAvatarFocus(person.avatarOriginal, img);
+  const size = 200;
+  const baseScale = Math.max(size / img.width, size / img.height);
+  let zoom = 1;
+  if(focus.box && focus.box.height){
+    zoom = clamp(86 / (focus.box.height * baseScale), 1, 2.3);
+  }
+  person.avatarScale = Number(zoom.toFixed(2));
+  const drawW = img.width * baseScale * person.avatarScale;
+  const drawH = img.height * baseScale * person.avatarScale;
+  const drawScale = baseScale * person.avatarScale;
+  person.avatarX = 100 - (size - drawW) / 2 - focus.x * drawScale;
+  person.avatarY = 100 - (size - drawH) / 2 - focus.y * drawScale;
+  constrainAvatarTransform(person, img, size);
+  person.avatarAuto = focus.type;
 }
 
 async function updateAvatarCrop(person){
@@ -320,6 +495,7 @@ function addPerson(level, data={}){
     id,
     name:data.name||"",
     dept:data.dept||"",
+    deptDisplay:data.deptDisplay||"",
     award:data.award||"季度之星",
     review:data.review||"",
     avatarFile:data.avatarFile||"",
@@ -327,7 +503,8 @@ function addPerson(level, data={}){
     avatarOriginal:data.avatarOriginal||"",
     avatarX:data.avatarX||0,
     avatarY:data.avatarY||0,
-    avatarScale:data.avatarScale||1
+    avatarScale:data.avatarScale||1,
+    avatarAuto:data.avatarAuto||""
   });
   renderList(level);
 }
@@ -335,8 +512,10 @@ function addPerson(level, data={}){
 function resetPeople(){
   sPersons = [];
   aPersons = [];
+  selectedDepartmentKey = "";
   renderList("s");
   renderList("a");
+  updateDepartmentBatchUI();
 }
 
 function removePerson(level, id){
@@ -375,9 +554,12 @@ function renderList(level){
             <canvas id="av-${p.id}" width="200" height="200"></canvas>
           </div>
           <div class="avatar-tools">
-            <label class="btn-upload">上传头像<input type="file" accept="image/*" style="display:none" onchange="uploadAvatar('${p.id}',this)"></label>
+            <div class="avatar-action-row">
+              <label class="btn-upload">上传头像<input type="file" accept="image/*" style="display:none" onchange="uploadAvatar('${p.id}',this)"></label>
+              <button class="btn-upload" onclick="recenterAvatar('${p.id}')" type="button">自动居中</button>
+            </div>
             <input class="avatar-zoom" type="range" min="1" max="2.5" step="0.01" value="${p.avatarScale || 1}" oninput="updateAvatarZoom('${p.id}',this.value)">
-            <div class="avatar-hint">拖动头像调整上下左右位置，滑动调节缩放。${p.avatarFile ? `匹配名：${escapeHtml(p.avatarFile)}` : ""}</div>
+            <div class="avatar-hint">上传后自动识别人脸并居中，也可拖动微调。${p.avatarAuto ? `当前：${p.avatarAuto === "face" ? "人脸识别" : "构图居中"}` : ""}${p.avatarFile ? `；匹配名：${escapeHtml(p.avatarFile)}` : ""}</div>
           </div>
         </div>
       </div>` : "";
@@ -402,6 +584,7 @@ function renderList(level){
       </div>`;
   }).join("");
   renderAvatarEditors(level);
+  updateDepartmentBatchUI();
 }
 
 function updateField(level, id, key, val){
@@ -436,10 +619,19 @@ async function uploadAvatar(id, input){
 
 async function setPersonAvatarFromFile(person, file){
   person.avatarOriginal = await readFileAsDataURL(file);
-  person.avatarX = 0;
-  person.avatarY = 0;
-  person.avatarScale = 1;
+  person.avatarFile = file.name;
+  await autoCenterAvatar(person);
   await updateAvatarCrop(person);
+}
+
+async function recenterAvatar(id){
+  const person = findSPerson(id);
+  if(!person || !person.avatarOriginal) return;
+  await autoCenterAvatar(person);
+  await updateAvatarCrop(person);
+  renderList("s");
+  generate();
+  document.getElementById("status").textContent = "头像已重新自动居中。";
 }
 
 async function importAvatarImages(input){
@@ -448,7 +640,8 @@ async function importAvatarImages(input){
 
   const personByKey = new Map();
   sPersons.forEach(person => {
-    [person.avatarFile, person.name].forEach(value => {
+    const dept = getPersonDept(person);
+    [person.avatarFile, person.name, `${dept}${person.name}`, `${person.name}${dept}`].forEach(value => {
       const key = avatarMatchKey(value);
       if(key && !personByKey.has(key)) personByKey.set(key, person);
     });
@@ -457,7 +650,23 @@ async function importAvatarImages(input){
   let matched = 0;
   const unmatched = [];
   for(const file of files){
-    const person = personByKey.get(avatarMatchKey(file.name));
+    const fileKey = avatarMatchKey(file.name);
+    let person = personByKey.get(fileKey);
+    if(!person){
+      const candidates = sPersons.filter(item => {
+        const nameKey = avatarMatchKey(item.name);
+        const deptKey = avatarMatchKey(getPersonDept(item));
+        return nameKey && fileKey.includes(nameKey) && (!deptKey || fileKey.includes(deptKey));
+      });
+      person = candidates.length === 1 ? candidates[0] : null;
+    }
+    if(!person){
+      const candidates = sPersons.filter(item => {
+        const nameKey = avatarMatchKey(item.name);
+        return nameKey && fileKey.includes(nameKey);
+      });
+      person = candidates.length === 1 ? candidates[0] : null;
+    }
     if(!person){
       unmatched.push(file.name);
       continue;
@@ -541,6 +750,10 @@ function parseConfigRows(rows){
     if(["a级远程天数","a远程天数","a_remote","aremote"].includes(key)) setInputValue("a_remote", value);
     if(["考勤有效期","有效期","daterange","date_range"].includes(key)) setInputValue("date_range", value);
     if(["hr联系人","hr","联系人","hr_name","hrname"].includes(key)) setInputValue("hr_name", value);
+    if(["结尾鼓励语","底部结尾","closingtext","closing_text"].includes(key)) setInputValue("closing_text", value);
+    if(["咨询说明","联系说明","contacttext","contact_text"].includes(key)) setInputValue("contact_text", value);
+    if(["页脚第一行","footerline1","footer_line_1"].includes(key)) setInputValue("footer_line_1", value);
+    if(["页脚第二行","footerline2","footer_line_2"].includes(key)) setInputValue("footer_line_2", value);
   });
 }
 
@@ -556,13 +769,14 @@ function importPeopleRows(rows){
     const name = String(pickValue(row, ["姓名","name","员工姓名"]) || "").trim();
     if(!name) return;
     const dept = String(pickValue(row, ["部门","dept","department"]) || "").trim();
+    const deptDisplay = String(pickValue(row, ["展示部门名","英文部门名","部门英文名","副标题部门","displaydept","displaydepartment"]) || "").trim();
     const award = String(pickValue(row, ["奖项","award"]) || "季度之星").trim();
     const review = String(pickValue(row, ["评语","绩效评语","review","comment"]) || "").trim();
     const avatarFile = String(pickValue(row, ["头像文件名","头像","avatar","avatarfile","图片文件名"]) || "").trim();
     if(rawLevel.includes("A")){
-      addPerson("a", {name, dept, avatarFile});
+      addPerson("a", {name, dept, deptDisplay, avatarFile});
     }else{
-      addPerson("s", {name, dept, award, review, avatarFile});
+      addPerson("s", {name, dept, deptDisplay, award, review, avatarFile});
     }
   });
 }
@@ -588,18 +802,20 @@ function importSectionedAwardRows(rows){
 
     const name = String(row[0] || "").trim();
     const dept = String(row[1] || "").trim();
+    const deptDisplay = String(row[5] || "").trim();
     if(!name) return;
 
     if(mode === "s"){
       addPerson("s", {
         name,
         dept,
+        deptDisplay,
         award:String(row[2] || "季度之星").trim(),
         review:String(row[3] || "").trim(),
         avatarFile:String(row[4] || "").trim()
       });
     }else{
-      addPerson("a", {name, dept, avatarFile:String(row[4] || "").trim()});
+      addPerson("a", {name, dept, deptDisplay, avatarFile:String(row[4] || "").trim()});
     }
   });
 }
@@ -677,9 +893,25 @@ function emailCss(){
   .attendance-guide p{margin:0 0 8px;}
   .attendance-guide p:last-child{margin-bottom:0;}
   .attendance-guide__sub{padding-left:1.1em;}
+  .closing-text{font-size:14px;color:#4a5568;margin:0 0 8px;line-height:1.8;}
+  .contact-text{font-size:14px;color:#718096;margin:8px 0 0;line-height:1.8;}
   .email-footer{background:#f7fafc;padding:20px 40px;text-align:center;border-top:1px solid #e2e8f0;}
   .email-footer p{font-size:12px;color:#a0aec0;margin:0;line-height:1.6;}
   `;
+}
+
+function buildAttendanceGuide(data){
+  const onlyA = !data.s_list.length && data.a_list.length;
+  const flexibleMethod = onlyA ? "" : '<p class="attendance-guide__sub">（1）弹性考勤：免申请，在使用有效期内，工作日最早上班时间为9:00，最迟上班为14:30，不计迟到早退，确保工时不低于7.5H即可；</p>';
+  const remotePrefix = onlyA ? "（1）" : "（2）";
+  return `
+    <div class="attendance-guide">
+      <p class="attendance-guide__title">考勤特权使用说明：</p>
+      <p>1、使用有效期：${escapeHtml(data.date_range)}，逾期即失效，请合理安排使用；</p>
+      <p>2、使用方式：</p>
+      ${flexibleMethod}
+      <p class="attendance-guide__sub">${remotePrefix}远程办公：登录OA-右侧【工作办事】-【考勤】-【居家办公申请】，选择远程办公日期并提交（不满1天按1天计），Leader、考勤HR审批后生效，当日需正常进行上下班外勤打卡，工作时间与办公室办公一致。</p>
+    </div>`;
 }
 
 function buildEmail(data){
@@ -742,20 +974,14 @@ function buildEmail(data){
     ${sSection}
     ${aSection}
     <hr class="divider">
-    <div class="attendance-guide">
-      <p class="attendance-guide__title">考勤特权使用说明：</p>
-      <p>1、使用有效期：${escapeHtml(data.date_range)}，逾期即失效，请合理安排使用；</p>
-      <p>2、使用方式：</p>
-      <p class="attendance-guide__sub">（1）弹性考勤：免申请，在使用有效期内，工作日最早上班时间为9:00，最迟上班为14:30，不计迟到早退，确保工时不低于7.5H即可；</p>
-      <p class="attendance-guide__sub">（2）远程办公：登录OA-右侧【工作办事】-【考勤】-【居家办公申请】，选择远程办公日期并提交（不满1天按1天计），Leader、考勤HR审批后生效，当日需正常进行上下班外勤打卡，工作时间与办公室办公一致。</p>
-    </div>
+    ${buildAttendanceGuide(data)}
     <hr class="divider">
-    <p style="font-size:14px;color:#4a5568;">感谢每一位在本季度辛勤付出的同事，愿大家以优秀为标杆，铆足干劲冲刺新程，解锁下一季度的 S/A 级 荣誉！</p>
-    <p style="font-size:14px;color:#718096;margin-top:8px;">如有疑问，请联系 ${escapeHtml(data.hr_name)}。</p>
+    ${String(data.closing_text || "").trim() ? `<p class="closing-text">${renderTemplate(data.closing_text, data)}</p>` : ""}
+    ${String(data.contact_text || "").trim() ? `<p class="contact-text">${renderTemplate(data.contact_text, data)}</p>` : ""}
   </div>
   <div class="email-footer">
-    <p>2026 · 人力资源部 Aurora HR Department</p>
-    <p>本邮件由系统自动发送，请勿直接回复</p>
+    ${String(data.footer_line_1 || "").trim() ? `<p>${renderTemplate(data.footer_line_1, data)}</p>` : ""}
+    ${String(data.footer_line_2 || "").trim() ? `<p>${renderTemplate(data.footer_line_2, data)}</p>` : ""}
   </div>
 </div></div>
 </body></html>`;
@@ -764,6 +990,7 @@ function buildEmail(data){
 function collectData(){
   return {
     title: `${document.getElementById("dept_cn").value} 2026年${document.getElementById("quarter").value}绩效表彰`,
+    dept_cn: document.getElementById("dept_cn").value,
     dept: document.getElementById("dept").value,
     quarter: document.getElementById("quarter").value,
     s_bonus: document.getElementById("s_bonus").value,
@@ -772,28 +999,75 @@ function collectData(){
     a_remote: document.getElementById("a_remote").value,
     date_range: document.getElementById("date_range").value,
     hr_name: document.getElementById("hr_name").value,
+    closing_text: document.getElementById("closing_text").value,
+    contact_text: document.getElementById("contact_text").value,
+    footer_line_1: document.getElementById("footer_line_1").value,
+    footer_line_2: document.getElementById("footer_line_2").value,
     s_list: sPersons,
     a_list: aPersons
   };
 }
 
-function generate(){
-  emailHTML = buildEmail(collectData());
+function previewDepartment(key){
+  selectedDepartmentKey = key || "";
+  const group = getSelectedDepartmentGroup();
+  if(!group){
+    generate();
+    return;
+  }
+  emailHTML = buildEmail(buildDepartmentData(group));
   document.getElementById("preview").srcdoc = emailHTML;
-  document.getElementById("status").textContent = "生成成功，所有处理均在浏览器本地完成。";
+  document.getElementById("status").textContent = `正在预览：${group.deptName}。`;
+  updateDepartmentBatchUI();
+}
+
+function generate(){
+  updateDepartmentBatchUI();
+  const group = getSelectedDepartmentGroup();
+  emailHTML = group ? buildEmail(buildDepartmentData(group)) : buildEmail(collectData());
+  document.getElementById("preview").srcdoc = emailHTML;
+  document.getElementById("status").textContent = group ? `生成成功，当前预览：${group.deptName}。` : "生成成功，所有处理均在浏览器本地完成。";
+}
+
+function downloadBlob(blob, fileName){
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = fileName;
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 function downloadEmail(){
   if(!emailHTML) generate();
-  const blob = new Blob([emailHTML], {type:"text/html;charset=utf-8"});
-  const a = document.createElement("a");
-  const dept = document.getElementById("dept_cn").value.trim() || "极光表彰";
+  const group = getSelectedDepartmentGroup();
+  const dept = group ? group.deptName : (document.getElementById("dept_cn").value.trim() || "极光表彰");
   const quarter = document.getElementById("quarter").value.trim() || "Q";
-  a.href = URL.createObjectURL(blob);
-  a.download = `${dept}_${quarter}_绩效表彰邮件.html`;
-  a.click();
-  URL.revokeObjectURL(a.href);
+  downloadBlob(new Blob([emailHTML], {type:"text/html;charset=utf-8"}), `${safeFileName(dept)}_${quarter}_绩效表彰邮件.html`);
   document.getElementById("status").textContent = "HTML 文件已下载。";
+}
+
+async function downloadDepartmentBundle(){
+  const groups = getDepartmentGroups();
+  if(!groups.length){
+    document.getElementById("status").textContent = "还没有可生成的部门，请先导入 Excel。";
+    return;
+  }
+  const quarter = document.getElementById("quarter").value.trim() || "Q";
+  if(window.JSZip){
+    const zip = new JSZip();
+    groups.forEach(group => {
+      zip.file(`${safeFileName(group.deptName)}_${quarter}_绩效表彰邮件.html`, buildEmail(buildDepartmentData(group)));
+    });
+    const blob = await zip.generateAsync({type:"blob"});
+    downloadBlob(blob, `${quarter}_部门绩效表彰邮件.zip`);
+    document.getElementById("status").textContent = `已生成 ${groups.length} 个部门文件并打包下载。`;
+    return;
+  }
+  groups.forEach(group => {
+    const html = buildEmail(buildDepartmentData(group));
+    downloadBlob(new Blob([html], {type:"text/html;charset=utf-8"}), `${safeFileName(group.deptName)}_${quarter}_绩效表彰邮件.html`);
+  });
+  document.getElementById("status").textContent = `JSZip 加载失败，已尝试分别下载 ${groups.length} 个 HTML 文件。`;
 }
 
 async function copyEmailHTML(){
