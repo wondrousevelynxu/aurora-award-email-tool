@@ -1,0 +1,620 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>教师节海报生成器 · 2026</title>
+  <script src="assets/vendor/xlsx-js-style.min.js"></script>
+  <script src="assets/vendor/html2canvas.min.js"></script>
+  <style>
+    @font-face{font-family:PosterSans;src:url("assets/fonts/AlibabaPuHuiTi-Regular.ttf") format("truetype");font-weight:400;font-style:normal;font-display:swap}
+    @font-face{font-family:PosterSans;src:url("assets/fonts/AlimamaShuHeiTi-Bold.otf") format("opentype");font-weight:700 900;font-style:normal;font-display:swap}
+    :root{
+      --poster-width:1080px;--hero-height:860px;
+      --ink:#17376b;--ink-soft:#607aab;--paper:#edf5ff;--paper-2:#ffffff;
+      --navy:#0d53ad;--navy-2:#2f83e7;--gold:#ffffff;--coral:#1f6fd3;
+      --line:rgba(24,74,142,.16);--panel:#f7faff;--shadow:0 18px 50px rgba(21,76,156,.2);
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;min-height:100%;background:#cbd8ef;color:var(--ink);font-family:PosterSans,-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
+    body{overflow:hidden}
+    button,input,textarea,select{font:inherit}
+    button{cursor:pointer}
+    .app{height:100vh;display:grid;grid-template-columns:370px 1fr;overflow:hidden}
+    .editor{background:var(--panel);border-right:1px solid rgba(16,26,49,.16);overflow:auto;z-index:2}
+    .editor-head{padding:26px 26px 24px;background:linear-gradient(135deg,#15376f,#315ea8);color:#fff;position:sticky;top:0;z-index:4}
+    .kicker{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#ffffff;font-weight:800}
+    .editor-head h1{font-family:PosterSans,sans-serif;font-weight:800;letter-spacing:.03em;font-size:26px;margin:10px 0 5px}
+    .editor-head p{color:#b9c6db;font-size:12px;line-height:1.55;margin:0}
+    .section{padding:20px 24px;border-bottom:1px solid var(--line)}
+    .section-title{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:800;margin:0 0 14px;letter-spacing:.04em}
+    .section-title:before{content:"";width:4px;height:16px;background:var(--coral);display:block}
+    .field{margin-bottom:12px}.field:last-child{margin-bottom:0}
+    .control-group{padding:14px;border:1px solid rgba(16,26,49,.12);border-radius:10px;background:#fff;margin-top:12px}.control-group:first-of-type{margin-top:0}.control-group .field{margin-bottom:0}.control-group .note{margin-top:10px}
+    label{display:block;font-size:11px;font-weight:800;color:var(--ink-soft);margin-bottom:6px;letter-spacing:.04em}
+    input,textarea,select{width:100%;border:1px solid rgba(16,26,49,.18);border-radius:7px;padding:9px 10px;background:#fff;color:var(--ink);outline:none}
+    input:focus,textarea:focus,select:focus{border-color:var(--coral);box-shadow:0 0 0 3px rgba(31,111,211,.14)}
+    textarea{resize:vertical;line-height:1.6}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .lang-toggle{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;background:#e5efff;border-radius:8px}
+    .lang-toggle button{border:0;border-radius:6px;padding:8px;color:var(--ink-soft);background:transparent;font-size:12px;font-weight:800}
+    .lang-toggle button.active{background:#fff;color:var(--coral);box-shadow:0 2px 8px rgba(16,26,49,.1)}
+    .actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .btn{border:1px solid rgba(16,26,49,.16);background:#ffffff;color:var(--ink);border-radius:7px;padding:9px 10px;font-size:12px;font-weight:800}
+    .btn:hover{border-color:var(--coral);color:var(--coral)}
+    .btn-primary{border-color:var(--navy);background:var(--navy);color:#fff}.btn-primary:hover{background:#1a3155;color:#fff}
+    .btn-gold{border:0;background:var(--gold);color:var(--navy)}
+    .note{font-size:11px;color:#718099;line-height:1.55;margin:9px 0 0}
+    .file-label{display:block;text-align:center}
+    .status{font-size:11px;line-height:1.5;color:var(--coral);min-height:16px;margin-top:10px}
+    .preview-shell{overflow:auto;background:#cbd8ef;padding:38px 44px 80px}
+    .preview-toolbar{position:sticky;top:0;z-index:3;display:flex;justify-content:flex-end;gap:9px;margin:0 auto 18px;max-width:1080px}
+    .preview-toolbar .btn{background:rgba(255,255,255,.86);backdrop-filter:blur(10px)}
+    #poster{width:var(--poster-width);max-width:none;margin:0 auto;background:var(--paper);overflow:hidden;box-shadow:var(--shadow);position:relative}
+    .poster-hero{height:var(--hero-height);position:relative;color:#fff;overflow:hidden;background:var(--navy)}
+    .hero-art{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 52%;opacity:.98}
+    .hero-wash{position:absolute;inset:0;background:linear-gradient(180deg,rgba(17,47,98,.16) 0%,rgba(17,47,98,.04) 42%,rgba(24,66,137,.34) 100%)}
+    .hero-grid{display:none}
+    .hero-grid:before,.hero-grid:after{content:"";position:absolute;background:rgba(255,255,255,.58)}
+    .hero-grid:before{width:1px;height:46px;left:-1px;top:-1px}.hero-grid:after{width:46px;height:1px;left:-1px;top:-1px}
+    .hero-content{position:absolute;inset:0;padding:86px 86px 62px;display:flex;flex-direction:column;align-items:flex-start}
+    .hero-content:before{content:"✦";position:absolute;z-index:0;left:74px;top:258px;color:rgba(255,255,255,.8);font-size:34px;line-height:1;transform:rotate(18deg);text-shadow:0 0 18px rgba(255,255,255,.8);pointer-events:none}
+    .hero-content:after{display:none}
+    .hero-logo{position:relative;z-index:1;width:84px;height:auto;display:block;object-fit:contain;object-position:left top}
+    .hero-title-block{position:absolute;z-index:1;left:86px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;align-items:flex-start}
+    .brandline{display:flex;align-items:center;gap:16px;color:#ffffff;font-weight:800;font-size:16px;letter-spacing:.12em}
+    .brandline:after{content:"";display:inline-block;width:58px;height:1px;background:rgba(255,255,255,.72)}
+    .hero-eyebrow{margin-top:auto;color:#ffffff;font-size:14px;font-weight:800;letter-spacing:.26em;text-transform:uppercase}
+    .title-decor{position:relative;z-index:1;display:flex;align-items:center;gap:14px;color:rgba(255,255,255,.9);margin:0 0 12px}
+    .title-decor span{width:74px;height:1px;background:rgba(255,255,255,.72)}
+    .title-decor i{font-style:normal;font-size:20px;line-height:1;text-shadow:0 0 14px rgba(255,255,255,.9)}
+    .hero-title{position:relative;z-index:1;font-family:PosterSans,sans-serif;font-weight:700;font-size:120px;line-height:.98;letter-spacing:.025em;margin:0 0 10px;background:none;-webkit-background-clip:initial;background-clip:initial;color:#ffffff;filter:drop-shadow(0 5px 12px rgba(18,62,139,.34))}
+    .title-swoosh{position:relative;z-index:1;width:238px;height:11px;margin:-2px 0 14px 12px;transform:skewX(-28deg) rotate(-3deg);background:linear-gradient(100deg,#4b9af7 0%,#59dce0 68%,rgba(255,255,255,.1) 100%);clip-path:polygon(0 44%,100% 0,76% 58%,100% 58%,30% 100%,44% 56%);opacity:.94}
+    .hero-subtitle{font-family:PosterSans,sans-serif;font-size:28px;letter-spacing:.16em;color:#ffffff;margin:0}
+    .hero-meta{width:100%;display:flex;justify-content:space-between;align-items:flex-end;margin-top:44px;color:#d2d6dd;font-size:13px;letter-spacing:.08em}
+    .hero-meta strong{display:block;color:#fff;font-size:18px;margin-top:6px;letter-spacing:.08em}
+    .hero-stamp{position:absolute;right:78px;top:80px;width:84px;height:84px;border:1px solid #ffffff;border-radius:50%;display:grid;place-items:center;color:#ffffff;font-size:11px;line-height:1.45;text-align:center;letter-spacing:.16em;transform:rotate(12deg)}
+    .intro-wrap{padding:56px 74px 0;background:var(--paper);position:relative}
+    .rule-label{display:flex;align-items:center;gap:14px;color:#356ec6;font-size:12px;font-weight:900;letter-spacing:.2em}
+    .rule-label:after{content:"";height:1px;background:var(--coral);flex:1;opacity:.5}
+    .intro-card{background:linear-gradient(135deg,#fff 0%,#f8fbff 100%);border:1px solid rgba(25,53,98,.14);margin-top:22px;padding:42px 48px;position:relative;overflow:hidden;border-radius:18px;box-shadow:none}
+    .intro-card:before,.intro-card:after{display:none}
+    .intro-text{position:relative;z-index:1;display:grid;gap:28px;font-family:PosterSans,sans-serif;color:var(--ink)}
+    .intro-highlight{font-size:22px;font-weight:800;line-height:1.65;color:#0d53ad;white-space:pre-line}
+    .intro-body{font-size:20px;font-weight:400;line-height:1.9;color:var(--ink);white-space:pre-line}
+    .intro-text[contenteditable="true"],.editable{outline:none;border-radius:4px}
+    .intro-text[contenteditable="true"]:hover,.editable:hover{box-shadow:0 0 0 2px rgba(31,111,211,.2)}
+    .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);margin-top:30px;border:1px solid var(--line)}
+    .stat{background:var(--paper-2);padding:18px 20px}.stat b{font:800 44px/1 PosterSans,sans-serif;color:var(--coral)}.stat span{display:block;font-size:12px;font-weight:800;color:var(--ink-soft);margin-top:5px;letter-spacing:.08em}
+    .people-wrap{padding:64px 74px 0;background:var(--paper)}
+    .section-head{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;border-bottom:1px solid var(--ink-soft);padding-bottom:14px}
+    .section-head h2{font-family:PosterSans,sans-serif;font-weight:800;font-size:38px;margin:0;letter-spacing:.08em}.section-head p{font-size:13px;color:var(--ink-soft);margin:0 0 3px;text-align:right}
+    .department{margin-top:34px}.dept-head{display:flex;align-items:baseline;gap:14px;margin-bottom:16px}.dept-head h3{font-size:18px;margin:0;letter-spacing:.04em}.dept-head span{font-size:12px;color:var(--ink-soft);letter-spacing:.08em}.dept-head i{height:1px;flex:1;background:var(--line)}
+    .member-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:32px;margin-top:36px}
+    .member-card{aspect-ratio:1/1;height:auto;background:#bcd8f8;border:1px solid rgba(16,26,49,.15);padding:0;position:relative;display:block;overflow:hidden;border-radius:15px;text-align:left;box-shadow:0 10px 22px rgba(32,83,153,.14)}
+    .member-card:before{content:"";position:absolute;inset:0;z-index:1;background:linear-gradient(180deg,rgba(11,42,93,.02) 43%,rgba(8,38,91,.05) 63%,rgba(6,32,79,.84) 100%);pointer-events:none}
+    .member-card:after{display:none}
+    .member-top{display:contents}.avatar-editor{position:absolute;inset:0;z-index:0;overflow:visible;border-radius:inherit}.avatar-clip{position:absolute;inset:0;z-index:1;overflow:hidden;border-radius:inherit;pointer-events:none}.member-card.is-photo-editing .avatar-clip{overflow:visible;border-radius:0;box-shadow:inset 0 0 0 2px #62b9ff}.avatar{position:absolute;left:50%;top:50%;width:106%;height:auto;max-width:none;max-height:none;border:0;border-radius:0;background:transparent;box-shadow:none;opacity:1;transform-origin:center center;transition:transform .08s ease,opacity .12s ease;will-change:transform;touch-action:none;user-select:none;pointer-events:none;-webkit-user-drag:none}.member-card.is-photo-editing .avatar{opacity:.5}
+    .avatar.placeholder{inset:0;left:0;top:0;width:100%;height:100%;transform:none!important;display:grid;place-items:center;background:linear-gradient(145deg,#0d53ad,#4b9af7);color:#ffffff;font-size:30px;font-weight:900}
+    .member-overlay{position:absolute;z-index:2;left:15px;right:15px;bottom:15px;display:flex;flex-direction:column;align-items:flex-start;gap:6px}
+    .member-name{max-width:100%;color:#ffffff;font-size:20px;font-weight:900;line-height:1.18;text-shadow:0 2px 9px rgba(0,0,0,.4)}
+    .member-dept{display:block;max-width:100%;font-size:11px;color:#ffffff;line-height:1.3;margin:0;padding:5px 9px;border:1px solid rgba(255,255,255,.34);border-radius:6px;background:rgba(29,104,202,.72);white-space:normal;word-break:break-all;backdrop-filter:blur(5px)}
+    .member-note{display:none}
+    /* 编辑时让照片可以越过卡片边界显示，方便确认拖动位置；导出时再恢复卡片裁切。 */
+    .member-card.is-photo-editing{overflow:visible;outline:2px solid #62b9ff;outline-offset:3px;cursor:grab;z-index:5}
+    #poster.is-exporting .member-card{overflow:hidden}
+    .member-card.is-photo-dragging{cursor:grabbing}
+    .photo-adjust-ui{position:absolute;z-index:4;left:10px;right:10px;top:10px;display:flex;align-items:center;justify-content:flex-end;gap:4px;opacity:0;pointer-events:none;transition:opacity .12s ease}
+    .member-card.is-photo-editing .photo-adjust-ui{opacity:1;pointer-events:auto}
+    .photo-adjust-ui button{width:25px;height:25px;flex:none;border:1px solid rgba(255,255,255,.46);border-radius:50%;padding:0;display:flex;align-items:center;justify-content:center;background:rgba(8,38,91,.75);color:#fff;font-size:14px;line-height:1;cursor:pointer;backdrop-filter:blur(5px)}
+    .photo-adjust-ui button:hover{background:#1d68ca}.photo-adjust-ui button[data-photo-action="confirm"]{background:rgba(36,145,103,.82)}.photo-adjust-ui button[data-photo-action="confirm"]:hover{background:#249167}
+    .photo-adjust-ui button[data-photo-action="fit"]{font-size:14px}
+    .photo-zoom-label{height:25px;min-width:42px;padding:0 6px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.34);border-radius:999px;background:rgba(8,38,91,.68);color:#fff;font-size:10px;line-height:1;text-align:center;backdrop-filter:blur(5px)}
+    .photo-adjust-hint{position:absolute;z-index:4;right:12px;top:45px;left:auto;height:25px;padding:0 8px;display:flex;align-items:center;justify-content:flex-end;border:1px solid rgba(255,255,255,.28);border-radius:999px;background:rgba(8,38,91,.55);color:rgba(255,255,255,.92);font-size:10px;line-height:1;text-align:right;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .12s ease;backdrop-filter:blur(5px)}
+    .member-card.is-photo-editing .photo-adjust-hint{opacity:1}
+    .footer-wrap{padding:42px 74px 74px;background:var(--paper)}
+    .closing-card{background:linear-gradient(135deg,#0d53ad,#2f83e7);color:#fff;padding:42px 42px;position:relative;overflow:hidden;border:1px solid rgba(255,255,255,.2);border-radius:20px;box-shadow:none}
+    .closing-card:before{display:none}
+    .closing-card:after{content:"";position:absolute;z-index:0;right:0;bottom:0;width:250px;height:197px;background:url("assets/aurora-logo-gradient-white.svg") right bottom/250px 197px no-repeat;opacity:.16;transform:none;pointer-events:none}
+    .closing-label{font-size:11px;letter-spacing:.2em;color:#ffffff;font-weight:900}.closing-text{font-family:PosterSans,sans-serif;font-size:21px;line-height:1.85;white-space:pre-line;margin:0;max-width:720px;position:relative;z-index:1}
+    .poster-footer{display:flex;justify-content:space-between;gap:20px;align-items:flex-end;margin-top:42px;color:#68738a;font-size:12px;letter-spacing:.1em}.poster-footer strong{display:block;color:var(--ink);font-size:15px;margin-bottom:6px}
+    .poster-en .hero-title{font-size:86px;letter-spacing:.02em}.poster-en .title-swoosh{width:210px}.poster-en .hero-subtitle{font-size:24px}.poster-en .intro-highlight,.poster-en .intro-body,.poster-en .closing-text{font-family:PosterSans,sans-serif;line-height:1.65}.poster-en .member-name{font-size:17px}.poster-en .member-dept,.poster-en .member-note{font-family:PosterSans,sans-serif;font-size:11px}
+    #poster.clean-poster .hero-eyebrow,#poster.clean-poster .hero-meta,#poster.clean-poster .hero-stamp,#poster.clean-poster .rule-label,#poster.clean-poster .stats,#poster.clean-poster .member-note,#poster.clean-poster .closing-label{display:none}
+    #poster.clean-poster .hero-title{display:flex;flex-direction:column;gap:10px}
+    #poster.clean-poster .hero-subtitle{display:flex;flex-direction:column;gap:4px}
+    #poster.clean-poster .brandline{display:none}
+    .poster-zh #pv-title-en,.poster-zh #pv-subtitle-en,.poster-zh #pv-footer-en{display:none}
+    .poster-en #pv-title,.poster-en #pv-subtitle,.poster-en #pv-footer{display:none}
+    #poster.clean-poster .intro-card{margin-top:0}
+    .is-exporting{max-width:none!important;width:1080px!important}.is-exporting .intro-text[contenteditable="true"]:hover,.is-exporting .editable:hover{box-shadow:none}.is-exporting .hero-grid{display:none}.is-exporting .photo-adjust-ui,.is-exporting .photo-adjust-hint{display:none!important}.is-exporting .member-card{overflow:hidden!important;outline:none!important}.is-exporting .avatar-clip{overflow:hidden!important;border-radius:inherit!important}.is-exporting .avatar{opacity:1!important;transition:none!important}.is-exporting .intro-card,.is-exporting .closing-card{box-shadow:none!important}
+    @media(max-width:1050px){.app{grid-template-columns:330px 1fr}.preview-shell{padding:25px 20px 60px}}
+    @media(max-width:760px){body{overflow:auto}.app{display:block;height:auto}.editor{height:auto;overflow:visible}.editor-head{position:relative}.preview-shell{overflow:auto;padding:18px 10px 40px}.preview-toolbar{position:relative;justify-content:flex-start;overflow:auto}.preview-toolbar .btn{white-space:nowrap}.section-head{display:block}.section-head p{text-align:left;margin-top:10px}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="editor">
+      <header class="editor-head">
+        <div class="kicker">Teachers' Day / 2026</div>
+        <h1>教师节海报生成器</h1>
+        <p>内容与视觉分离的年度模板。输入名单与头像，生成中英文长图。</p>
+      </header>
+
+      <section class="section">
+        <h2 class="section-title">语言与数据</h2>
+        <div class="control-group"><div class="field"><label>海报语言</label><div class="lang-toggle"><button id="lang-zh" class="active" type="button">中文</button><button id="lang-en" type="button">English</button></div></div></div>
+        <div class="control-group"><div class="actions"><label class="btn file-label">上传 Excel<input id="excel-input" type="file" accept=".xlsx,.xls" hidden></label><label class="btn file-label">上传头像文件夹<input id="photos-input" type="file" webkitdirectory directory multiple accept="image/*" hidden></label></div><div class="field" style="margin-top:12px"><label>头图上传</label><label class="btn file-label">选择头图<input id="hero-input" type="file" accept="image/png,image/jpeg,image/webp" hidden></label><input id="replace-photo-input" type="file" accept="image/png,image/jpeg,image/webp" hidden><p class="note">上传后立即替换头部背景并用于导出。建议尺寸：1080×860px；其他比例会按头图槽位裁切。</p></div></div>
+        <div class="control-group"><div class="actions"><button class="btn" id="download-template" type="button">下载 Excel 模板</button><button class="btn" id="reset-demo" type="button">恢复示例内容</button></div><p class="note">头像文件名可填写在 Excel，也可直接使用姓名命名。照片会保持原始比例铺满卡片，不拉伸；选中照片后可手动调整位置和大小。数据仅在本机浏览器中处理。</p></div><div id="status" class="status"></div>
+      </section>
+
+      <section class="section">
+        <h2 class="section-title">海报信息</h2>
+        <div class="row"><div class="field"><label>年份</label><input data-key="year" value="2026"></div><div class="field"><label>日期</label><input data-key="date" value="09.10"></div></div>
+        <div class="field"><label>主标题</label><input data-key="title" value="教师节快乐"></div>
+        <div class="field"><label>副标题</label><input data-key="subtitle" value="致敬极光引路人"></div>
+      </section>
+
+      <section class="section">
+        <h2 class="section-title">引文与结尾</h2>
+        <div class="field"><label>中文高亮引文</label><textarea data-key="introHighlightZh" rows="3">每一段航程，都需要方向的指引；每一次成长，都离不开温暖的陪伴。</textarea></div>
+        <div class="field"><label>中文引文正文</label><textarea data-key="introBodyZh" rows="7">金秋九月，在这个属于感恩与致敬的季节，我们迎来了第42个教师节。让我们共同走近这群可爱的人——极光的讲师与导师，感谢他们用专业与热忱，铺就前路，指引方向。
+
+自2025年9月至2026年9月，极光有37位讲师以知识赋能团队，传递智慧；28位导师以陪伴助力新人，守护成长。他们是极光最温暖的底色，也是我们最信赖的引路人。</textarea></div>
+        <div class="field"><label>English introduction highlight</label><textarea data-key="introHighlightEn" rows="3">Every journey needs a compass; every step of growth needs warm companionship.</textarea></div>
+        <div class="field"><label>English introduction body</label><textarea data-key="introBodyEn" rows="7">In this golden September — a season of gratitude and honor — we celebrate the 42nd Teachers’ Day. Let's shine a spotlight on these remarkable people: Aurora’s lecturers and mentors. Thank them for paving the way and lighting the path with their expertise and passion.
+
+From September 2025 to September 2026, Aurora has had 37 lecturers empowering teams with knowledge and wisdom, and 28 mentors supporting newcomers with guidance and care. They are the warm heart of Aurora, and our most trusted guides.</textarea></div>
+        <div class="field"><label>中文结尾</label><textarea data-key="closingZh" rows="6">成长路上，幸有良师，
+再次感谢所有倾心付出的引路人！
+9月10日教师节当天，我们为每位老师准备了暖心礼品与茶歇，用这份小小的心意，传达我们深深的敬意。
+也期待更多伙伴加入导师、讲师行列，一起在传授中沉淀，在分享中成长！</textarea></div>
+        <div class="field"><label>English closing</label><textarea data-key="closingEn" rows="6">On the journey of growth, we are blessed to have great mentors.
+Once again, our heartfelt thanks to every devoted guide!
+On Teachers’ Day, September 10, we have prepared warm gifts and refreshments for each of our teachers — a small token that carries our deep respect.
+We also look forward to more partners joining the mentor and lecturer teams, to grow through teaching and thrive through sharing!</textarea></div>
+      </section>
+
+      <section class="section">
+        <h2 class="section-title">落款</h2>
+        <div class="row"><div class="field"><label>中文落款</label><input data-key="footerZh" value="人力资源部"></div><div class="field"><label>English footer</label><input data-key="footerEn" value="People & Culture Department"></div></div>
+      </section>
+
+      <section class="section">
+        <h2 class="section-title">导出</h2>
+        <div class="actions"><button class="btn btn-primary" id="export-poster" type="button">标准 PNG</button><button class="btn btn-primary" id="export-poster-hd" type="button">高清 2× PNG</button></div>
+      </section>
+    </aside>
+
+    <main class="preview-shell">
+      <div class="preview-toolbar"><button class="btn" id="fit-preview" type="button">适应预览</button><button class="btn btn-gold" id="export-poster-top" type="button">标准 PNG</button><button class="btn btn-gold" id="export-poster-top-hd" type="button">高清 2× PNG</button></div>
+      <article id="poster" class="clean-poster">
+        <section class="poster-hero">
+          <img class="hero-art" id="hero-art" src="assets/guide-book-robot-back-hero-v4.png" alt="" />
+          <div class="hero-wash"></div><div class="hero-grid"></div>
+          <div class="hero-stamp">09<br>SEP<br>2026</div>
+          <div class="hero-content">
+            <div class="brandline"><span id="pv-brand">极光表彰</span></div>
+            <img class="hero-logo" src="assets/aurora-logo-gradient-white.svg" alt="极光" />
+            <div class="hero-title-block">
+              <div class="title-decor" aria-hidden="true"><span></span><i>✦</i><span></span></div>
+              <div class="hero-eyebrow" id="pv-year">TEACHERS' DAY · 2026</div>
+              <h1 class="hero-title"><span class="editable" id="pv-title" contenteditable="true">教师节快乐</span><span class="editable" id="pv-title-en" contenteditable="true">Happy Teachers' Day</span></h1>
+              <div class="title-swoosh" aria-hidden="true"></div>
+              <p class="hero-subtitle"><span class="editable" id="pv-subtitle" contenteditable="true">致敬极光引路人</span><span class="editable" id="pv-subtitle-en" contenteditable="true">Saluting Our Aurora Guides</span></p>
+            </div>
+            <div class="hero-meta"><div>每一次成长<br><strong>都有引路人的光</strong></div><div><span id="pv-date">09.10</span><br>THANK YOU, GUIDES</div></div>
+          </div>
+        </section>
+
+        <section class="intro-wrap">
+          <div class="rule-label">FIELD NOTE 09.10 <span>年度致敬档案 / ANNUAL TRIBUTE FILE</span></div>
+          <div class="intro-card"><div class="intro-text" id="pv-intro"><div class="intro-highlight editable" id="pv-intro-highlight" contenteditable="true"></div><div class="intro-body editable" id="pv-intro-body" contenteditable="true"></div></div>
+            <div class="stats"><div class="stat"><b id="stat-lecturers">37</b><span>讲师 / LECTURERS</span></div><div class="stat"><b id="stat-mentors">28</b><span>导师 / MENTORS</span></div><div class="stat"><b id="stat-day">42</b><span>教师节 / TEACHERS' DAY</span></div></div>
+          </div>
+        </section>
+
+        <section class="people-wrap">
+          <div class="section-head"><h2 id="pv-people-title">认识「极光引路人」</h2><p id="pv-people-note">以下排名不分先后</p></div>
+          <div id="people-list"></div>
+        </section>
+
+        <section class="footer-wrap"><div class="closing-card"><div class="closing-label">A NOTE OF GRATITUDE</div><div class="closing-text editable" id="pv-closing" contenteditable="true"></div></div><div class="poster-footer"><div><strong id="pv-footer">人力资源部</strong><span id="pv-footer-en">People &amp; Culture Department</span></div><div><span id="pv-footer-day">教师节 · </span><span id="pv-footer-date">2026.09.10</span></div></div></section>
+      </article>
+    </main>
+  </div>
+
+  <script>
+    const PEOPLE = [
+      {deptZh:"BDS开发者服务事业线",deptEn:"BDS Global Business Unit",namesZh:["俞玲香","吴少洪","龚吉松","李建娜","卿笃礼","曹大俊","王珂","陈泽鹏","李嘉祺","朱梦婉"],namesEn:["Cherry Yu","Kathy Wu","Duke Gong","Flora Li","Ronnie Qing","Eden Cao","Rim Wang","Wander Chen","Jacky Li","Shirley Zhu"]},
+      {deptZh:"BMI行业洞察事业部",deptEn:"BMI Business Unit",namesZh:["孙梦子","刘小静","刘洋航","戴欣","钟达杨"],namesEn:["Sarah Sun","Uye Liu","Joken Liu","Shelly Dai","Leo Zhong"]},
+      {deptZh:"产研中心",deptEn:"Product R&D Center",namesZh:["王成","王泽琳","鲍蕾","胡文峰","欧阳昌友","秦世勉","吴亮","李亭雨","曾依珊","韩国东","张俊鹏","詹强","李祖平","余文杰","黄淑妮","陈志豪","辛大奇","刘旭东","付凯","郑佳汇","刘飞","刘基石","杨瀚","胡浩玥","方露","叶欣澜","向红","李晓然","王星雨"],namesEn:["Matteo Wang","Max Wang","Rayna Bao","Jason Hu","Leo Ouyang","Angel Qin","Neil Wu","Annie Li","Sandy Zeng","Edison Han","Roc Zhang","Keong Chiam","Morn Li","Jenny Yu","Cindy Huang","Zero Chen","Daqi Xin","Phil Liu","Kyle Fu","Robert Zheng","Fay Liu","Mopper Liu","Alan Yang","Alen Hu","Lucy Fang","Lana Ye","Lris Xiang","Sara Li","Xingyu Wang"]},
+      {deptZh:"数据中心",deptEn:"Data Center",namesZh:["曾祥嵩","刘俊辉","何波安","冯志民","冯美玲"],namesEn:["Charlie Zeng","Jay Liu","Potter He","Gabriel Feng","Lily Feng"]},
+      {deptZh:"用户体验部",deptEn:"User Experience Department",namesZh:["刘晟"],namesEn:["Sean Liu"]},
+      {deptZh:"市场部",deptEn:"Marketing Department",namesZh:["全啸宇"],namesEn:["Tanya Quan"]},
+      {deptZh:"销售运营管理部",deptEn:"Sales Operations Department",namesZh:["徐淑云","曹梦茹"],namesEn:["Lydia Xu","Cathy Cao"]},
+      {deptZh:"财务部",deptEn:"Finance Department",namesZh:["韩哲","马桂芳"],namesEn:["Ada Han","Nova Ma"]},
+      {deptZh:"人力资源部",deptEn:"People & Culture Department",namesZh:["廖芝艺"],namesEn:["Zoey Liao"]},
+      {deptZh:"法律合规部",deptEn:"Legal & Compliance Department",namesZh:["姚菲"],namesEn:["Viki Yao"]},
+      {deptZh:"内审投资者报告部",deptEn:"Internal Audit & Investor Reporting Department",namesZh:["王姗晨","杨佳雨","文筱贤"],namesEn:["Stella Wang","Young JY Yang","Sally Wen"]},
+    ];
+    const DEFAULT_HERO_SRC = "assets/guide-book-robot-back-hero-v4.png";
+    const PHOTO_TRANSFORM_SCHEMA_VERSION=6;
+    const state = {lang:"zh",brand:"极光表彰",year:"2026",date:"09.10",title:"教师节快乐",subtitle:"致敬极光引路人",titleEn:"Happy Teachers' Day",subtitleEn:"Saluting Our Aurora Guides",introHighlightZh:"",introBodyZh:"",introHighlightEn:"",introBodyEn:"",closingZh:"",closingEn:"",footerZh:"人力资源部",footerEn:"People & Culture Department",heroImage:"",photos:{},photoTransforms:{},notes:{},people:[],photoTransformVersion:PHOTO_TRANSFORM_SCHEMA_VERSION};
+    const defaults = {};
+    document.querySelectorAll("[data-key]").forEach(el => { defaults[el.dataset.key] = el.value; });
+    state.introHighlightZh = document.querySelector('[data-key="introHighlightZh"]').value; state.introBodyZh = document.querySelector('[data-key="introBodyZh"]').value;
+    state.introHighlightEn = document.querySelector('[data-key="introHighlightEn"]').value; state.introBodyEn = document.querySelector('[data-key="introBodyEn"]').value;
+    state.closingZh = document.querySelector('[data-key="closingZh"]').value; state.closingEn = document.querySelector('[data-key="closingEn"]').value;
+    state.people = JSON.parse(JSON.stringify(PEOPLE));
+    const $ = (s,root=document)=>root.querySelector(s); const $$=(s,root=document)=>[...root.querySelectorAll(s)];
+    const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+    const initials = name => String(name||"?").replace(/\s+/g,"").slice(0,2).toUpperCase();
+    function splitIntroText(value){const parts=String(value||"").trim().split(/\n\s*\n/);return {highlight:parts.shift()||"",body:parts.join("\n\n")}}
+    function combinedIntro(lang=activeLang()){return lang==="en"?[state.introHighlightEn,state.introBodyEn].filter(Boolean).join("\n\n"):[state.introHighlightZh,state.introBodyZh].filter(Boolean).join("\n\n")}
+    const PHOTO_SCALE_MIN=1, PHOTO_SCALE_MAX=5, PHOTO_OFFSET_MAX=140, PHOTO_AUTO_FIT_VERSION=3;
+    let photoInteraction=null,replacePhotoKey=null;
+    function clampPhotoScale(value){return Math.max(PHOTO_SCALE_MIN,Math.min(PHOTO_SCALE_MAX,Math.round((Number(value)||1)*100)/100))}
+    function clampPhotoOffset(value){return Math.max(-PHOTO_OFFSET_MAX,Math.min(PHOTO_OFFSET_MAX,Math.round(Number(value)||0)))}
+    function clampPhotoRotate(value){return Math.max(-180,Math.min(180,Math.round((Number(value)||0)*10)/10))}
+    function photoMinScale(key){
+      const img=document.querySelector(`[data-photo-key="${key}"] img.avatar`),aspect=img?.naturalWidth&&img?.naturalHeight?img.naturalWidth/img.naturalHeight:1;
+      return Math.max(PHOTO_SCALE_MIN,Math.min(PHOTO_SCALE_MAX,aspect>=1?aspect:1/aspect));
+    }
+    function photoOffsetLimits(key,t=getPhotoTransform(key)){
+      const card=document.querySelector(`[data-photo-key="${key}"]`),img=card?.querySelector("img.avatar"),size=card?.getBoundingClientRect().width||0;
+      if(!size||!img?.naturalWidth||!img?.naturalHeight)return {x:PHOTO_OFFSET_MAX,y:PHOTO_OFFSET_MAX};
+      const aspect=img.naturalWidth/img.naturalHeight,box=size*1.06,contentW=(aspect>=1?box:box*aspect)*t.scale,contentH=(aspect>=1?box/ aspect:box)*t.scale,rad=t.rotate*Math.PI/180,c=Math.abs(Math.cos(rad)),s=Math.abs(Math.sin(rad));
+      return {x:Math.max(0,Math.round((contentW*c+contentH*s-size)/2)),y:Math.max(0,Math.round((contentW*s+contentH*c-size)/2))};
+    }
+    function clampPhotoOffsetForCard(value,key,axis,t=getPhotoTransform(key)){
+      const limit=photoOffsetLimits(key,t)[axis]??PHOTO_OFFSET_MAX;
+      return Math.max(-limit,Math.min(limit,Math.round(Number(value)||0)));
+    }
+    function normalizePhotoTransform(key,changes){
+      const next={...getPhotoTransform(key),...changes};
+      next.scale=Math.max(photoMinScale(key),Math.min(PHOTO_SCALE_MAX,Math.round((Number(next.scale)||1)*100)/100));
+      const limits=photoOffsetLimits(key,next);
+      next.x=clampPhotoOffsetForCard(next.x,key,"x",next);next.y=clampPhotoOffsetForCard(next.y,key,"y",next);
+      return next;
+    }
+    function getPhotoTransform(key){
+      const raw=state.photoTransforms?.[key]||{};
+      return {x:clampPhotoOffset(raw.x),y:clampPhotoOffset(raw.y),scale:clampPhotoScale(raw.scale),rotate:clampPhotoRotate(raw.rotate),focusX:Number.isFinite(Number(raw.focusX))?Math.max(10,Math.min(90,Number(raw.focusX))):50,focusY:Number.isFinite(Number(raw.focusY))?Math.max(10,Math.min(90,Number(raw.focusY))):50,manual:raw.manual===true,autoFitVersion:raw.autoFitVersion||0};
+    }
+    function photoObjectPosition(key){const t=getPhotoTransform(key);return `${t.focusX}% ${t.focusY}%`}
+    function photoTransformStyle(key){
+      const t=getPhotoTransform(key);
+      return `transform:translate(calc(-50% + ${t.x}px),calc(-50% + ${t.y}px)) rotate(${t.rotate}deg) scale(${t.scale})`;
+    }
+    function applyPhotoIntrinsicSize(avatar){
+      if(!avatar)return;
+      const apply=()=>{
+        const width=avatar.naturalWidth||0,height=avatar.naturalHeight||0;
+        if(!width||!height)return;
+        const aspect=width/height;
+        if(aspect>=1){avatar.style.width="106%";avatar.style.height=`${106/aspect}%`}
+        else{avatar.style.width=`${106*aspect}%`;avatar.style.height="106%"}
+      };
+      if(avatar.complete&&avatar.naturalWidth)apply();
+      else avatar.addEventListener("load",apply,{once:true});
+    }
+    function applyPhotoTransform(card,key){
+      const avatars=card?.querySelectorAll(".avatar");
+      if(avatars?.length){const t=getPhotoTransform(key),transform=`translate(calc(-50% + ${t.x}px),calc(-50% + ${t.y}px)) rotate(${t.rotate}deg) scale(${t.scale})`;avatars.forEach(avatar=>{applyPhotoIntrinsicSize(avatar);avatar.style.transform=transform})}
+      const label=card?.querySelector(".photo-zoom-label");
+      if(label) label.textContent=`${Math.round(getPhotoTransform(key).scale*100)}%`;
+    }
+    function selectPhotoCard(card){
+      if(!card?.querySelector(".avatar:not(.placeholder)")) return;
+      document.querySelectorAll(".member-card.is-photo-editing").forEach(el=>{if(el!==card)el.classList.remove("is-photo-editing","is-photo-dragging")});
+      card.classList.add("is-photo-editing");
+      applyPhotoTransform(card,card.dataset.photoKey);
+    }
+    function updatePhotoTransform(card,changes){
+      const key=card.dataset.photoKey;
+      state.photoTransforms[key]={...normalizePhotoTransform(key,changes),manual:true};
+      applyPhotoTransform(card,key);
+      saveDraft();
+    }
+    function loadPhotoImage(src){return new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=reject;img.src=src})}
+    function clampPhotoFocus(value,min,max,fallback){const n=Number(value);return Number.isFinite(n)?Math.max(min,Math.min(max,n)):fallback}
+    async function detectPhotoHead(src){
+      const img=await loadPhotoImage(src), width=img.naturalWidth, height=img.naturalHeight;
+      if(typeof FaceDetector !== "undefined"){
+        try{
+          const faces=await new FaceDetector({fastMode:true,maxDetectedFaces:1}).detect(img);
+          if(faces?.length){const box=faces[0].boundingBox;return {x:clampPhotoFocus((box.x+box.width/2)/width*100,20,80,50),y:clampPhotoFocus((box.y+box.height*.42)/height*100,16,55,28),faceHeight:box.height/height,detected:true}}
+        }catch(e){}
+      }
+      const canvas=document.createElement("canvas"), maxSide=280, ratio=maxSide/Math.max(width,height);
+      canvas.width=Math.max(1,Math.round(width*ratio));canvas.height=Math.max(1,Math.round(height*ratio));
+      const ctx=canvas.getContext("2d",{willReadFrequently:true});
+      if(!ctx)return {x:50,y:28,faceHeight:.22,detected:false};
+      ctx.drawImage(img,0,0,canvas.width,canvas.height);
+      const data=ctx.getImageData(0,0,canvas.width,canvas.height).data, cols=8, rows=10;let best={score:-1,x:.5,y:.28,size:.22};
+      for(let gy=0;gy<6;gy++)for(let gx=0;gx<cols;gx++){
+        const x0=Math.floor(gx*canvas.width/cols),x1=Math.floor((gx+1)*canvas.width/cols),y0=Math.floor(gy*canvas.height/rows),y1=Math.floor((gy+1)*canvas.height/rows);let skin=0,total=0,lum=0,lumSq=0;
+        for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){const p=(y*canvas.width+x)*4,r=data[p],g=data[p+1],b=data[p+2],l=.299*r+.587*g+.114*b;lum+=l;lumSq+=l*l;total++;if(r>55&&g>35&&b>25&&r>=g&&r>=b&&r-g>10)skin++}
+        if(!total)continue;const mean=lum/total,variance=Math.max(0,lumSq/total-mean*mean),score=variance*.36+(skin/total)*180+(1-Math.abs((gx+.5)/cols-.5))*14-gy*2;
+        if(score>best.score)best={score,x:(gx+.5)/cols,y:(gy+.5)/rows,size:Math.max(.16,Math.min(.38,2.4*(y1-y0)/canvas.height))};
+      }
+      return best.score>18?{x:clampPhotoFocus(best.x*100,20,80,50),y:clampPhotoFocus(best.y*100,16,55,28),faceHeight:best.size,detected:false}:{x:50,y:28,faceHeight:.22,detected:false};
+    }
+    function photoAspectScale(width,height){return width&&height?Math.max(width/height,height/width):1}
+    async function fitPhotoToCard(key){
+      const current=getPhotoTransform(key),src=state.photos?.[key],card=document.querySelector(`[data-photo-key="${key}"]`);
+      state.photoTransforms[key]={...current,x:0,y:0,scale:photoMinScale(key),focusX:50,focusY:50,rotate:0,manual:false};
+      applyPhotoTransform(card,key);
+      if(src){try{const img=await loadPhotoImage(src);state.photoTransforms[key]={...getPhotoTransform(key),scale:clampPhotoScale(photoAspectScale(img.naturalWidth,img.naturalHeight)),manual:false};applyPhotoTransform(card,key)}catch(e){}}
+      saveDraft();
+    }
+    async function autoFitPhoto(key,src,force=false){
+      const current=getPhotoTransform(key);
+      // 只按原图宽高比适配到正方形，不做人像检测、不裁切源文件。
+      if(!force && current.manual) return;
+      try{
+        const img=await loadPhotoImage(src);
+        state.photoTransforms[key]={...current,x:0,y:0,scale:clampPhotoScale(photoAspectScale(img.naturalWidth,img.naturalHeight)),focusX:50,focusY:50,rotate:0,manual:false,autoFitVersion:PHOTO_AUTO_FIT_VERSION};
+        applyPhotoTransform(document.querySelector(`[data-photo-key="${key}"]`),key);
+        saveDraft();
+      }catch(e){
+        state.photoTransforms[key]={...current,x:0,y:0,scale:1,focusX:50,focusY:50,rotate:0,manual:false,autoFitVersion:PHOTO_AUTO_FIT_VERSION};
+        applyPhotoTransform(document.querySelector(`[data-photo-key="${key}"]`),key);
+      }
+    }
+    async function autoFitAllPhotos(){
+      const tasks=Object.entries(state.photos||{}).map(([key,src])=>autoFitPhoto(key,src));
+      await Promise.all(tasks);
+    }
+    function setStatus(msg, error=false){ const el=$("#status"); el.textContent=msg||""; el.style.color=error?"#b33f5a":"#1f6fd3"; }
+    function activeLang(){return state.lang === "en" ? "en" : "zh"}
+    function readStateFromForm(){ $$('[data-key]').forEach(el=>{state[el.dataset.key]=el.value;}); }
+    function syncForm(){ $$('[data-key]').forEach(el=>{if(state[el.dataset.key] != null) el.value=state[el.dataset.key];}); }
+    function render(){
+      const en=activeLang(); document.documentElement.lang=en === "en" ? "en" : "zh-CN"; $("#poster").classList.toggle("poster-en",en === "en"); $("#poster").classList.toggle("poster-zh",en !== "en");
+      $("#hero-art").src=state.heroImage || DEFAULT_HERO_SRC;
+      $("#pv-brand").textContent=en === "en" ? "AURORA AWARDS" : state.brand; $("#pv-year").textContent=`TEACHERS' DAY · ${state.year}`; $("#pv-date").textContent=state.date;
+      $("#pv-title").textContent=en === "en" ? "" : state.title; $("#pv-title-en").textContent=en === "en" ? state.titleEn : "";
+      $("#pv-subtitle").textContent=en === "en" ? "" : state.subtitle; $("#pv-subtitle-en").textContent=en === "en" ? state.subtitleEn : "";
+      $("#pv-intro-highlight").textContent=en === "en" ? state.introHighlightEn : state.introHighlightZh; $("#pv-intro-body").textContent=en === "en" ? state.introBodyEn : state.introBodyZh; $("#pv-closing").textContent=en === "en" ? state.closingEn : state.closingZh;
+      $("#pv-people-title").textContent=en === "en" ? "Meet Our “Aurora Guides”" : "认识「极光引路人」";
+      $("#pv-people-note").textContent=en === "en" ? "Listed in no particular order" : "以下排名不分先后";
+      const intro=combinedIntro(en); const lecturerMatch=intro.match(en?/(\d+)\s+lecturers/i:/([0-9]+)\s*位讲师/); const mentorMatch=intro.match(en?/(\d+)\s+mentors/i:/([0-9]+)\s*位导师/); const dayMatch=intro.match(en?/(\d+)(?:st|nd|rd|th)\s+Teachers[’']?\s+Day/i:/第([0-9]+)个教师节/); if(lecturerMatch)$("#stat-lecturers").textContent=lecturerMatch[1]; if(mentorMatch)$("#stat-mentors").textContent=mentorMatch[1]; if(dayMatch)$("#stat-day").textContent=dayMatch[1];
+      $("#pv-footer").textContent=en === "en" ? "" : state.footerZh; $("#pv-footer-en").textContent=en === "en" ? state.footerEn : ""; $("#pv-footer-day").textContent=en === "en" ? "TEACHERS' DAY · " : "教师节 · "; $("#pv-footer-date").textContent=`${state.year}.${state.date}`;
+      $("#lang-zh").classList.toggle("active",en === "zh"); $("#lang-en").classList.toggle("active",en === "en"); renderPeople(); saveDraft();
+    }
+    function renderPeopleLegacy(){
+      const en=activeLang(), groups=state.people?.length ? state.people : PEOPLE;
+      const people=groups.flatMap((group,gi)=>group.namesZh.map((name,i)=>({group,gi,name,i})));
+      $("#people-list").innerHTML=`<div class="member-grid">${people.map(({group,gi,name,i})=>{const display=en === "en" ? group.namesEn[i] : name; const key=`${gi}-${i}`; const photo=state.photos[key]; const note=state.notes[key] || (en === "en" ? "Lecturer / Mentor" : "讲师 / 导师"); const tools=photo?`<div class="photo-adjust-ui"><button type="button" data-photo-action="reset" title="${en === "en" ? "Reset photo" : "重置照片"}">↺</button><button class="photo-fit-btn" type="button" data-photo-action="fit" title="${en === "en" ? "Fit photo size" : "适应大小"}">${en === "en" ? "Fit" : "适应"}</button><button type="button" data-photo-action="zoom-out" title="${en === "en" ? "Zoom out" : "缩小"}">−</button><span class="photo-zoom-label">${Math.round(getPhotoTransform(key).scale*100)}%</span><button type="button" data-photo-action="zoom-in" title="${en === "en" ? "Zoom in" : "放大"}">+</button><button type="button" data-photo-action="rotate-left" title="${en === "en" ? "Rotate left" : "左旋 15°"}">↺</button><button type="button" data-photo-action="rotate-right" title="${en === "en" ? "Rotate right" : "右旋 15°"}">↻</button></div><div class="photo-adjust-hint">${en === "en" ? "Drag photo · wheel to zoom" : "拖动照片 · 滚轮缩放"}</div>`:""; return `<article class="member-card" data-gi="${gi}" data-mi="${i}" data-photo-key="${key}">${photo?`<img class="avatar" src="${photo}" alt="" style="${photoTransformStyle(key)}">`:`<div class="avatar placeholder">${esc(initials(display))}</div>`}${tools}<div class="member-overlay"><div class="member-name editable" contenteditable="true" data-field="name">${esc(display)}</div><div class="member-dept editable" contenteditable="true" data-field="dept">${esc(en === "en" ? group.deptEn : group.deptZh)}</div></div><div class="member-note editable" contenteditable="true" data-field="note">${esc(note)}</div></article>`}).join("")}</div>`;
+    }
+    function renderPeople(){
+      const en=activeLang(), groups=state.people?.length ? state.people : PEOPLE;
+      const people=groups.flatMap((group,gi)=>group.namesZh.map((name,i)=>({group,gi,name,i})));
+      const list=$("#people-list");
+      list.innerHTML=`<div class="member-grid">${people.map(({group,gi,name,i})=>{
+        const display=en === "en" ? group.namesEn[i] : name;
+        const key=`${gi}-${i}`;
+        const photo=state.photos[key];
+        const note=state.notes[key] || (en === "en" ? "Lecturer / Mentor" : "讲师 / 导师");
+        const tools=photo ? `<div class="photo-adjust-ui"><button type="button" data-photo-action="replace" title="${en === "en" ? "Replace photo" : "替换照片"}">⇄</button><button type="button" data-photo-action="fit" title="${en === "en" ? "Fit photo size" : "适应大小"}">⛶</button><button type="button" data-photo-action="zoom-in" title="${en === "en" ? "Zoom in" : "放大"}">＋</button><button type="button" data-photo-action="zoom-out" title="${en === "en" ? "Zoom out" : "缩小"}">−</button><span class="photo-zoom-label">${Math.round(getPhotoTransform(key).scale*100)}%</span><button type="button" data-photo-action="confirm" title="${en === "en" ? "Confirm and continue preview" : "确认并继续预览"}">✓</button></div><div class="photo-adjust-hint">${en === "en" ? "Drag photo · wheel to zoom" : "拖动照片 · 滚轮缩放"}</div>` : "";
+        const photoMarkup=photo ? `<div class="avatar-editor"><div class="avatar-clip"><img class="avatar" src="${photo}" alt="" draggable="false" style="${photoTransformStyle(key)}"></div></div>` : `<div class="avatar placeholder">${esc(initials(display))}</div>`;
+        return `<article class="member-card" data-gi="${gi}" data-mi="${i}" data-photo-key="${key}">${photoMarkup}${tools}<div class="member-overlay"><div class="member-name editable" contenteditable="true" data-field="name">${esc(display)}</div><div class="member-dept editable" contenteditable="true" data-field="dept">${esc(en === "en" ? group.deptEn : group.deptZh)}</div></div><div class="member-note editable" contenteditable="true" data-field="note">${esc(note)}</div></article>`;
+      }).join("")}</div>`;
+      list.querySelectorAll(".member-card[data-photo-key]").forEach(card=>applyPhotoTransform(card,card.dataset.photoKey));
+    }
+    function saveDraft(){try{localStorage.setItem("teachers-day-poster-2026",JSON.stringify(state));}catch(e){}}
+    function restoreDraft(){
+      try{
+        const raw=localStorage.getItem("teachers-day-poster-2026");
+        if(!raw)return false;
+        const saved=JSON.parse(raw),resetPhotoTransforms=saved.photoTransformVersion !== PHOTO_TRANSFORM_SCHEMA_VERSION;
+        if(saved.brand === "AURORA 极光")saved.brand="极光表彰";
+        Object.assign(state,saved);
+        if(!Object.prototype.hasOwnProperty.call(saved,"introHighlightZh")&&saved.introZh){const split=splitIntroText(saved.introZh);state.introHighlightZh=split.highlight;state.introBodyZh=split.body}
+        if(!Object.prototype.hasOwnProperty.call(saved,"introHighlightEn")&&saved.introEn){const split=splitIntroText(saved.introEn);state.introHighlightEn=split.highlight;state.introBodyEn=split.body}
+        state.photos=state.photos&&typeof state.photos === "object"?Object.fromEntries(Object.entries(state.photos).filter(([,src])=>!String(src||"").startsWith("assets/people/"))):{};
+        state.photoTransforms=resetPhotoTransforms?{}:(state.photoTransforms&&typeof state.photoTransforms === "object"?state.photoTransforms:{});
+        state.notes=state.notes&&typeof state.notes === "object"?state.notes:{};
+        state.photoTransformVersion=PHOTO_TRANSFORM_SCHEMA_VERSION;
+        syncForm();
+        return true;
+      }catch(e){}
+      return false;
+    }
+    function setLanguage(lang){readStateFromForm();state.lang=lang;render()}
+    function applyEditable(target){
+      const card=target.closest("[data-gi]"); if(!card)return; const gi=+card.dataset.gi,mi=+card.dataset.mi,field=target.dataset.field; const value=target.textContent.trim(); const groups=state.people?.length ? state.people : PEOPLE;
+      if(field === "name"){if(state.lang === "en") groups[gi].namesEn[mi]=value; else groups[gi].namesZh[mi]=value}
+      if(field === "dept"){if(state.lang === "en") groups[gi].deptEn=value; else groups[gi].deptZh=value}
+      if(field === "note") state.notes[`${gi}-${mi}`]=value;
+      saveDraft();
+    }
+    function normalizeForExcel(rows){return rows.map(row=>row.map(v=>String(v??"").trim()))}
+    function parseExcel(file){
+      const reader=new FileReader(); reader.onload=()=>{try{const wb=XLSX.read(reader.result,{type:"array"});const infoSheet=wb.Sheets[wb.SheetNames.find(n=>/基本|信息|Info/i.test(n))||wb.SheetNames[0]];const rows=normalizeForExcel(XLSX.utils.sheet_to_json(infoSheet,{header:1,defval:""}));const map={};rows.slice(1).forEach(r=>{if(r[0])map[r[0]]=r[1]||r[2]||""});if(map["年份"]||map["Year"])state.year=map["年份"]||map["Year"];if(map["日期"]||map["Date"])state.date=map["日期"]||map["Date"];
+        if(map["中文高亮引文"])state.introHighlightZh=map["中文高亮引文"];if(map["中文引文正文"])state.introBodyZh=map["中文引文正文"];
+        if(map["English introduction highlight"])state.introHighlightEn=map["English introduction highlight"];if(map["English introduction body"])state.introBodyEn=map["English introduction body"];
+        if(map["中文引文"]&&!map["中文高亮引文"]&&!map["中文引文正文"]){const split=splitIntroText(map["中文引文"]);state.introHighlightZh=split.highlight;state.introBodyZh=split.body}
+        if(map["English introduction"]&&!map["English introduction highlight"]&&!map["English introduction body"]){const split=splitIntroText(map["English introduction"]);state.introHighlightEn=split.highlight;state.introBodyEn=split.body}
+        if(map["中文结尾"])state.closingZh=map["中文结尾"];if(map["English closing"])state.closingEn=map["English closing"];
+        const peopleSheet=wb.Sheets[wb.SheetNames.find(n=>/引路|名单|People/i.test(n))||wb.SheetNames[1]];if(peopleSheet){const pRows=normalizeForExcel(XLSX.utils.sheet_to_json(peopleSheet,{header:1,defval:""}));const header=pRows[0].map(x=>x.toLowerCase());const idx=(...keys)=>header.findIndex(h=>keys.some(k=>h.includes(k)));const dZi=idx("中文部门","department cn"),dEi=idx("英文部门","department en"),nZi=idx("中文姓名","name cn"),nEi=idx("英文姓名","name en");const groups=new Map();pRows.slice(1).forEach(r=>{const cn=r[nZi],en=r[nEi];if(!cn&&!en)return;const dz=r[dZi]||"未分组",de=r[dEi]||dz;if(!groups.has(dz))groups.set(dz,{deptZh:dz,deptEn:de,namesZh:[],namesEn:[]});groups.get(dz).namesZh.push(cn||en);groups.get(dz).namesEn.push(en||cn)});if(groups.size){PEOPLE.splice(0,PEOPLE.length,...groups.values());state.people=JSON.parse(JSON.stringify(PEOPLE));state.notes={};state.photos={};state.photoTransforms={}}}
+        syncForm();render();setStatus(`已导入 Excel：${PEOPLE.reduce((n,g)=>n+g.namesZh.length,0)} 位引路人`)}catch(e){console.error(e);setStatus("Excel 读取失败，请检查表头和文件格式",true)}};reader.readAsArrayBuffer(file)
+    }
+    function addHeroFile(file){if(!file||!/^image\//.test(file.type)){setStatus("请选择 PNG、JPG 或 WEBP 图片",true);return}const reader=new FileReader();reader.onload=()=>{const img=new Image();img.onload=()=>{state.heroImage=reader.result;render();const size=`${img.naturalWidth}×${img.naturalHeight}px`;setStatus(img.naturalWidth===1080&&img.naturalHeight===860?`头图已上传：${size}`:`头图已上传：${size}（建议调整为 1080×860px）`)};img.onerror=()=>setStatus("头图读取失败，请换一张图片",true);img.src=reader.result};reader.onerror=()=>setStatus("头图读取失败，请换一张图片",true);reader.readAsDataURL(file)}
+    function downloadTemplate(){const wb=XLSX.utils.book_new();const info=[["字段","中文内容","English content"],["年份",state.year,state.year],["日期",state.date,state.date],["中文高亮引文",state.introHighlightZh,""],["中文引文正文",state.introBodyZh,""],["English introduction highlight","",state.introHighlightEn],["English introduction body","",state.introBodyEn],["中文结尾",state.closingZh,""],["English closing","",state.closingEn],["中文落款",state.footerZh,state.footerEn]];const people=[["中文姓名","英文姓名","中文部门","英文部门","头像文件名"]];const groups=state.people?.length ? state.people : PEOPLE;groups.forEach(g=>g.namesZh.forEach((n,i)=>people.push([n,g.namesEn[i],g.deptZh,g.deptEn,""])));const s1=XLSX.utils.aoa_to_sheet(info),s2=XLSX.utils.aoa_to_sheet(people);s1["!cols"]=[{wch:34},{wch:60},{wch:60}];s2["!cols"]=[{wch:16},{wch:22},{wch:24},{wch:38},{wch:28}];XLSX.utils.book_append_sheet(wb,s1,"基本信息");XLSX.utils.book_append_sheet(wb,s2,"引路人名单");XLSX.writeFile(wb,"教师节海报导入模板_2026.xlsx")}
+    function normalizePhotoToken(value){return String(value||"").normalize("NFKC").replace(/\s+/g," ").trim().toLowerCase()}
+    function findPhotoTarget(file,groups){
+      const stem=file.name.replace(/\.[^.]+$/,""), clean=stem.replace(/^\s*\d{1,3}\s*/ ,"").trim();
+      const parts=clean.split(/\s*[-—–_]\s*/).filter(Boolean).map(normalizePhotoToken), tokens=[stem,clean,...parts].map(normalizePhotoToken);
+      const people=groups.flatMap((group,gi)=>group.namesZh.map((name,mi)=>({group,gi,mi,name,en:group.namesEn[mi]})));
+      const matched=people.find(person=>[person.name,person.en,`${person.name}-${person.en}`,`${person.group.deptZh}_${person.name}`].some(value=>tokens.includes(normalizePhotoToken(value))));
+      if(matched)return matched;
+      const serial=stem.match(/^\s*(\d{1,3})\b/);
+      return serial ? people[Number(serial[1])-1] : null;
+    }
+    function addPhotoFiles(files){
+      const fileArray=[...files].filter(file=>/^image\//.test(file.type));
+      let matched=0;
+      const pending=fileArray.length;
+      if(!pending){setStatus("未找到图片文件",true);return}
+      const groups=state.people?.length ? state.people : PEOPLE;
+      fileArray.forEach(file=>{
+        const reader=new FileReader();
+        reader.onload=()=>{
+          const target=findPhotoTarget(file,groups);
+          if(target){
+            const key=`${target.gi}-${target.mi}`;
+            state.photos[key]=reader.result;
+            state.photoTransforms[key]={x:0,y:0,scale:1,focusX:50,focusY:50,rotate:0,manual:false};
+            matched++;
+            autoFitPhoto(key,reader.result,true);
+          }
+          if(--window.__photoCount===0){render();autoFitAllPhotos();setStatus(`已加载 ${fileArray.length} 张头像，匹配成功 ${matched} 位`)}
+        };
+        reader.readAsDataURL(file);
+      });
+      window.__photoCount=pending;
+    }
+    function replacePhoto(file,key){
+      if(!file||!/^image\//.test(file.type)||!key)return;
+      const reader=new FileReader();
+      reader.onload=()=>{
+        state.photos[key]=reader.result;
+        state.photoTransforms[key]={x:0,y:0,scale:1,focusX:50,focusY:50,rotate:0,manual:false};
+        render();
+        requestAnimationFrame(async()=>{await autoFitPhoto(key,reader.result,true);selectPhotoCard(document.querySelector(`[data-photo-key="${key}"]`));setStatus("照片已替换，可继续调整位置和大小")});
+      };
+      reader.readAsDataURL(file);
+    }
+    function bindPhotoAdjustEvents(){
+      const list=$("#people-list");
+      list.addEventListener("pointerdown",e=>{
+        if(e.button!==0 || e.target.closest("[data-photo-action]") || e.target.closest(".editable")) return;
+        const card=e.target.closest(".member-card");
+        if(!card?.querySelector("img.avatar")) return;
+        const key=card.dataset.photoKey, t=getPhotoTransform(key);
+        selectPhotoCard(card);
+        photoInteraction={card,key,pointerId:e.pointerId,startX:e.clientX,startY:e.clientY,originX:t.x,originY:t.y,moved:false};
+        card.classList.add("is-photo-dragging");
+        card.setPointerCapture?.(e.pointerId);
+        e.preventDefault();
+      });
+      list.addEventListener("pointermove",e=>{
+        if(!photoInteraction || e.pointerId!==photoInteraction.pointerId) return;
+        const dx=e.clientX-photoInteraction.startX, dy=e.clientY-photoInteraction.startY;
+        if(Math.abs(dx)>2 || Math.abs(dy)>2) photoInteraction.moved=true;
+        const key=photoInteraction.key,base=getPhotoTransform(key),next={...base,x:photoInteraction.originX+dx,y:photoInteraction.originY+dy};
+        next.x=clampPhotoOffsetForCard(next.x,key,"x",next);next.y=clampPhotoOffsetForCard(next.y,key,"y",next);
+        state.photoTransforms[key]={...next,manual:true};
+        applyPhotoTransform(photoInteraction.card,photoInteraction.key);
+        e.preventDefault();
+      });
+      const finish=e=>{
+        if(!photoInteraction || e.pointerId!==photoInteraction.pointerId) return;
+        const interaction=photoInteraction;
+        if(interaction.card.hasPointerCapture?.(e.pointerId)) interaction.card.releasePointerCapture(e.pointerId);
+        interaction.card.classList.remove("is-photo-dragging");
+        photoInteraction=null;
+        saveDraft();
+      };
+      list.addEventListener("pointerup",finish);
+      list.addEventListener("pointercancel",finish);
+      /* 桌面浏览器回退：部分本地预览环境只派发 mouse 事件，不派发完整的 pointermove。 */
+      list.addEventListener("mousedown",e=>{
+        if(e.button!==0 || photoInteraction || e.target.closest("[data-photo-action]") || e.target.closest(".editable")) return;
+        const card=e.target.closest(".member-card");
+        if(!card?.querySelector("img.avatar")) return;
+        const key=card.dataset.photoKey,t=getPhotoTransform(key);
+        selectPhotoCard(card);
+        photoInteraction={card,key,pointerId:null,startX:e.clientX,startY:e.clientY,originX:t.x,originY:t.y,moved:false};
+        card.classList.add("is-photo-dragging");
+        e.preventDefault();
+      });
+      document.addEventListener("mousedown",e=>{
+        if(e.button!==0 || photoInteraction || e.target.closest("[data-photo-action]") || e.target.closest(".editable")) return;
+        const card=e.target.closest(".member-card");
+        if(!card?.querySelector("img.avatar")) return;
+        const key=card.dataset.photoKey,t=getPhotoTransform(key);
+        selectPhotoCard(card);
+        photoInteraction={card,key,pointerId:null,startX:e.clientX,startY:e.clientY,originX:t.x,originY:t.y,moved:false};
+        card.classList.add("is-photo-dragging");
+        e.preventDefault();
+      },true);
+      document.addEventListener("mousemove",e=>{
+        if(!photoInteraction) return;
+        const dx=e.clientX-photoInteraction.startX,dy=e.clientY-photoInteraction.startY;
+        if(Math.abs(dx)>2 || Math.abs(dy)>2) photoInteraction.moved=true;
+        const key=photoInteraction.key,base=getPhotoTransform(key),next={...base,x:photoInteraction.originX+dx,y:photoInteraction.originY+dy};
+        next.x=clampPhotoOffsetForCard(next.x,key,"x",next);next.y=clampPhotoOffsetForCard(next.y,key,"y",next);
+        state.photoTransforms[key]={...next,manual:true};
+        applyPhotoTransform(photoInteraction.card,key);
+        e.preventDefault();
+      });
+      document.addEventListener("mouseup",e=>{
+        if(!photoInteraction) return;
+        photoInteraction.card.classList.remove("is-photo-dragging");
+        photoInteraction=null;
+        saveDraft();
+      });
+      list.addEventListener("click",e=>{
+        const action=e.target.closest("[data-photo-action]");
+        if(action){
+          const card=action.closest(".member-card");
+          if(!card) return;
+          selectPhotoCard(card);
+          const key=card.dataset.photoKey, t=getPhotoTransform(key), name=action.dataset.photoAction;
+          if(name === "replace"){replacePhotoKey=key;const input=$("#replace-photo-input");input.value="";input.click()}
+          if(name === "reset") state.photoTransforms[key]={x:0,y:0,scale:1,rotate:0};
+          if(name === "fit") fitPhotoToCard(key);
+          if(name === "zoom-in") updatePhotoTransform(card,{scale:clampPhotoScale(t.scale+0.1)});
+          if(name === "zoom-out") updatePhotoTransform(card,{scale:clampPhotoScale(t.scale-0.1)});
+          if(name === "rotate-left") updatePhotoTransform(card,{rotate:clampPhotoRotate(t.rotate-15)});
+          if(name === "rotate-right") updatePhotoTransform(card,{rotate:clampPhotoRotate(t.rotate+15)});
+          if(name === "confirm"){card.classList.remove("is-photo-editing","is-photo-dragging");saveDraft()}
+          if(name === "reset"){applyPhotoTransform(card,key);saveDraft()}
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+        const card=e.target.closest(".member-card");
+        if(card && !e.target.closest(".editable") && card.querySelector("img.avatar")) selectPhotoCard(card);
+      });
+    list.addEventListener("wheel",e=>{
+      const card=e.target.closest(".member-card");
+      if(!card?.querySelector("img.avatar") || !card.classList.contains("is-photo-editing")) return;
+      const t=getPhotoTransform(card.dataset.photoKey);
+      updatePhotoTransform(card,{scale:clampPhotoScale(t.scale*(e.deltaY<0?1.08:0.92))});
+      e.preventDefault();
+    },{passive:false});
+    $("#poster").addEventListener("click",e=>{if(e.target.closest(".member-card"))return;document.querySelectorAll(".member-card.is-photo-editing").forEach(card=>card.classList.remove("is-photo-editing","is-photo-dragging"))});
+  }
+  async function waitForPosterAssets(poster){
+    if(document.fonts?.ready)await document.fonts.ready;
+    await Promise.all([...poster.querySelectorAll("img")].map(img=>img.complete?(img.decode?.().catch(()=>{})||Promise.resolve()):new Promise(resolve=>{img.addEventListener("load",resolve,{once:true});img.addEventListener("error",resolve,{once:true})})));
+    poster.querySelectorAll(".member-card[data-photo-key]").forEach(card=>applyPhotoTransform(card,card.dataset.photoKey));
+    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+  }
+  function fixPosterCloneForExport(doc){
+    const livePoster=document.getElementById("poster"),clonePoster=doc.getElementById("poster");
+    const style=doc.createElement("style");
+    style.textContent=`#poster{width:1080px!important;max-width:none!important}.photo-adjust-ui,.photo-adjust-hint{display:none!important}.member-card{overflow:hidden!important;outline:none!important}.avatar-clip{overflow:hidden!important;border-radius:inherit!important}.avatar{opacity:1!important;transition:none!important}.intro-card,.closing-card{box-shadow:none!important}.editable{outline:none!important;box-shadow:none!important}*{animation:none!important;transition:none!important}`;
+    doc.head.appendChild(style);
+    if(livePoster&&clonePoster){
+      clonePoster.style.width=`${livePoster.scrollWidth}px`;
+      [...livePoster.querySelectorAll(".avatar-clip img.avatar")].forEach((liveImg,index)=>{const cloneImg=clonePoster.querySelectorAll(".avatar-clip img.avatar")[index];if(cloneImg){cloneImg.src=liveImg.currentSrc||liveImg.src;cloneImg.style.cssText=liveImg.style.cssText}});
+      ["pv-intro-highlight","pv-intro-body","pv-closing","pv-footer","pv-footer-en","pv-footer-day","pv-footer-date"].forEach(id=>{const live=livePoster.querySelector(`#${id}`),clone=clonePoster.querySelector(`#${id}`);if(live&&clone){clone.innerHTML=live.innerHTML;clone.removeAttribute("contenteditable")}});
+    }
+    doc.querySelectorAll(".member-card.is-photo-editing").forEach(el=>el.classList.remove("is-photo-editing","is-photo-dragging"));
+  }
+  async function exportPoster(scale=1){const poster=$("#poster"),buttons=[$("#export-poster"),$("#export-poster-hd"),$("#export-poster-top"),$("#export-poster-top-hd")].filter(Boolean),labels=buttons.map(btn=>btn.textContent);buttons.forEach(btn=>{btn.disabled=true;btn.textContent="生成中…"});try{if(location.protocol === "file:")throw new Error("请通过本地服务打开页面后再导出");document.activeElement?.blur?.();window.getSelection?.()?.removeAllRanges?.();document.querySelectorAll(".member-card.is-photo-editing").forEach(card=>card.classList.remove("is-photo-editing","is-photo-dragging"));saveDraft();await waitForPosterAssets(poster);poster.classList.add("is-exporting");await waitForPosterAssets(poster);const exportWidth=poster.scrollWidth,exportHeight=poster.scrollHeight;const canvas=await html2canvas(poster,{scale,width:exportWidth,height:exportHeight,windowWidth:Math.max(1080,exportWidth),windowHeight:exportHeight,useCORS:true,allowTaint:false,backgroundColor:"#edf5ff",logging:false,imageTimeout:30000,onclone:fixPosterCloneForExport});const blob=await new Promise(resolve=>canvas.toBlob(resolve,"image/png"));const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`教师节海报-${state.year}-${state.lang}${scale>1?"-2x":""}.png`;a.click();URL.revokeObjectURL(a.href);setStatus(`PNG 长图已生成（${1080*scale}px）`) }catch(e){console.error(e);setStatus(e.message||"导出失败",true)}finally{poster.classList.remove("is-exporting");buttons.forEach((btn,index)=>{btn.disabled=false;btn.textContent=labels[index]})}}
+    $$('[data-key]').forEach(el=>el.addEventListener("input",()=>{state[el.dataset.key]=el.value;render()}));
+    $("#lang-zh").onclick=()=>setLanguage("zh");$("#lang-en").onclick=()=>setLanguage("en");$("#excel-input").onchange=e=>e.target.files[0]&&parseExcel(e.target.files[0]);$("#photos-input").onchange=e=>addPhotoFiles(e.target.files);$("#hero-input").onchange=e=>e.target.files[0]&&addHeroFile(e.target.files[0]);$("#replace-photo-input").onchange=e=>{const file=e.target.files[0];if(file&&replacePhotoKey)replacePhoto(file,replacePhotoKey);replacePhotoKey=null};$("#download-template").onclick=downloadTemplate;$("#export-poster").onclick=()=>exportPoster(1);$("#export-poster-hd").onclick=()=>exportPoster(2);$("#export-poster-top").onclick=()=>exportPoster(1);$("#export-poster-top-hd").onclick=()=>exportPoster(2);$("#fit-preview").onclick=()=>$("#poster").scrollIntoView({behavior:"smooth",block:"start"});
+    $("#reset-demo").onclick=()=>{localStorage.removeItem("teachers-day-poster-2026");location.reload()};
+    bindPhotoAdjustEvents();
+    $("#poster").addEventListener("input",e=>{if(e.target.matches(".editable")){if(e.target.id === "pv-title")state[state.lang === "en"?"titleEn":"title"]=e.target.textContent;if(e.target.id === "pv-subtitle")state[state.lang === "en"?"subtitleEn":"subtitle"]=e.target.textContent;if(e.target.id === "pv-intro-highlight")state[state.lang === "en"?"introHighlightEn":"introHighlightZh"]=e.target.textContent;if(e.target.id === "pv-intro-body")state[state.lang === "en"?"introBodyEn":"introBodyZh"]=e.target.textContent;if(e.target.id === "pv-closing")state[state.lang === "en"?"closingEn":"closingZh"]=e.target.textContent;applyEditable(e.target);saveDraft()}});
+    $("#poster").addEventListener("blur",e=>{if(e.target.matches(".editable")){applyEditable(e.target);saveDraft()}},true);
+    if(!restoreDraft()){syncForm()} render(); autoFitAllPhotos();
+  </script>
+</body>
+</html>
